@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="㈲フルエ 会計">
+<title>㈲フルエ 会計帳簿</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+:root{
+  --blue:#185FA5;--blue-light:#E6F1FB;
+  --text:#0b0b0b;--text2:#52514e;--text3:#898781;
+  --bg:#f5f5f0;--card:#ffffff;--border:rgba(0,0,0,0.1);
+  --safe-top:env(safe-area-inset-top);
+  --safe-bottom:env(safe-area-inset-bottom);
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;background:var(--bg);color:var(--text);min-height:100vh;}
+/* NAV */
+.navbar{position:sticky;top:0;z-index:100;background:rgba(255,255,255,0.92);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:0.5px solid var(--border);padding:calc(var(--safe-top) + 8px) 16px 10px;}
+.navbar-inner{display:flex;align-items:center;justify-content:space-between;max-width:600px;margin:0 auto;}
+.nav-title{font-size:17px;font-weight:600;color:var(--text);}
+.nav-btn{background:none;border:none;font-size:15px;color:var(--blue);cursor:pointer;padding:4px 0;}
+/* TABS */
+.tabs{display:flex;background:#fff;border-bottom:0.5px solid var(--border);position:sticky;top:calc(var(--safe-top) + 44px);z-index:99;}
+.tab{flex:1;padding:10px 4px;font-size:13px;text-align:center;cursor:pointer;color:var(--text3);border:none;background:none;border-bottom:2px solid transparent;transition:all .15s;}
+.tab.active{color:var(--blue);border-bottom-color:var(--blue);font-weight:500;}
+/* CONTENT */
+.page{display:none;padding:12px 16px;max-width:600px;margin:0 auto;padding-bottom:calc(var(--safe-bottom) + 80px);}
+.page.active{display:block;}
+/* SEARCH */
+.search-box{background:#fff;border-radius:10px;padding:8px 12px;display:flex;align-items:center;gap:8px;margin-bottom:12px;border:0.5px solid var(--border);}
+.search-box input{border:none;outline:none;font-size:15px;flex:1;background:transparent;color:var(--text);}
+/* SUMMARY BAR */
+.summary{background:var(--blue);color:#fff;border-radius:12px;padding:12px 16px;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;}
+.summary-label{font-size:12px;opacity:0.85;}
+.summary-amount{font-size:20px;font-weight:600;}
+/* ENTRY CARD */
+.entry{background:#fff;border-radius:10px;padding:12px 14px;margin-bottom:8px;border:0.5px solid var(--border);cursor:pointer;active:opacity:0.7;}
+.entry:active{opacity:0.75;}
+.entry-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:3px;}
+.entry-name{font-size:14px;font-weight:500;color:var(--text);flex:1;}
+.entry-amount{font-size:14px;font-weight:600;color:var(--text);white-space:nowrap;}
+.entry-sub{font-size:12px;color:var(--text3);}
+.badge{display:inline-block;font-size:10px;padding:1px 6px;border-radius:8px;background:#FEF3CD;color:#856404;margin-left:4px;}
+.badge.ok{background:#d1f7e0;color:#155724;}
+/* SECTION HEADER */
+.section-hdr{font-size:12px;font-weight:500;color:var(--text3);text-transform:uppercase;letter-spacing:0.3px;padding:8px 0 6px;}
+/* FORM */
+.form-card{background:#fff;border-radius:12px;border:0.5px solid var(--border);padding:16px;margin-bottom:12px;}
+.form-row{margin-bottom:14px;}
+.form-row label{display:block;font-size:12px;color:var(--text3);margin-bottom:5px;font-weight:500;}
+.form-row input,.form-row select,.form-row textarea{width:100%;padding:10px 12px;border:0.5px solid var(--border);border-radius:8px;font-size:15px;color:var(--text);background:#fff;outline:none;-webkit-appearance:none;appearance:none;}
+.form-row input:focus,.form-row select:focus{border-color:var(--blue);box-shadow:0 0 0 2px var(--blue-light);}
+.form-row select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23898781' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 12px center;padding-right:32px;}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.btn-submit{width:100%;padding:14px;background:var(--blue);color:#fff;border:none;border-radius:10px;font-size:16px;font-weight:600;cursor:pointer;margin-top:4px;}
+.btn-submit:active{opacity:0.85;}
+.btn-export{display:block;width:100%;padding:12px;background:#fff;color:var(--blue);border:1.5px solid var(--blue);border-radius:10px;font-size:15px;font-weight:500;text-align:center;cursor:pointer;margin-bottom:10px;}
+/* DETAIL MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:200;display:none;align-items:flex-end;}
+.modal-overlay.open{display:flex;}
+.modal{background:#fff;border-radius:20px 20px 0 0;width:100%;max-width:600px;margin:0 auto;padding:20px 20px calc(var(--safe-bottom) + 24px);max-height:80vh;overflow-y:auto;}
+.modal-handle{width:36px;height:4px;background:var(--border);border-radius:2px;margin:0 auto 16px;}
+.modal-title{font-size:17px;font-weight:600;margin-bottom:14px;}
+.detail-row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:0.5px solid var(--border);font-size:14px;}
+.detail-row:last-child{border-bottom:none;}
+.detail-label{color:var(--text3);}
+.detail-value{color:var(--text);font-weight:500;text-align:right;max-width:60%;}
+.modal-close{margin-top:14px;width:100%;padding:12px;background:var(--bg);color:var(--text);border:none;border-radius:10px;font-size:15px;cursor:pointer;}
+/* INVOICE INPUT */
+.invoice-field{display:flex;gap:8px;margin-top:8px;}
+.invoice-field input{flex:1;padding:8px 10px;border:0.5px solid var(--blue);border-radius:8px;font-size:13px;}
+.invoice-field button{padding:8px 12px;background:var(--blue);color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer;white-space:nowrap;}
+/* TOAST */
+.toast{position:fixed;bottom:calc(var(--safe-bottom) + 80px);left:50%;transform:translateX(-50%);background:#333;color:#fff;padding:10px 20px;border-radius:20px;font-size:13px;z-index:300;opacity:0;transition:opacity .3s;pointer-events:none;}
+.toast.show{opacity:1;}
+</style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+</head>
+<body>
+
+<div id="update-banner" style="background:#185FA5;color:#fff;padding:10px 16px;font-size:13px;line-height:1.6;position:relative">
+  <button onclick="document.getElementById('update-banner').style.display='none';localStorage.setItem('banner_dismissed','1')" style="position:absolute;top:8px;right:12px;background:none;border:none;color:#fff;font-size:18px;cursor:pointer;opacity:0.8">×</button>
+  <div style="font-weight:500;margin-bottom:4px">📢 アップデート情報</div>
+  <div>📷「新規入力」タブに写真読み取り機能を追加しました（要：Anthropic APIキー）</div>
+  <div>📊「集計」タブでグラフ確認できます</div>
+  <div>🧾「書き出し」タブ → 税理士用レポートを作成してメールで共有できます</div>
+  <div style="margin-top:6px;background:rgba(255,255,255,0.15);border-radius:6px;padding:6px 10px">
+    📱 <b>iPadで開く方法：</b>OneDriveでファイルを<b>長押し</b> → 「…」→「Safari で開く」
+  </div>
+  <div style="margin-top:4px;font-size:11px;opacity:0.8">右上 × で閉じる</div>
+</div>
+<script>if(localStorage.getItem('banner_dismissed'))document.getElementById('update-banner').style.display='none';</script>
+<div class="navbar">
+  <div class="navbar-inner">
+    <div class="nav-title">㈲フルエ 会計帳簿</div>
+    <button class="nav-btn" onclick="showPage('nyuryoku')">＋ 新規</button>
+  </div>
+</div>
+
+<div class="tabs">
+  <button class="tab active" onclick="showPage('ryoshu')">領収書</button>
+  <button class="tab" onclick="showPage('shiire')">仕入請求書</button>
+  <button class="tab" onclick="showPage('nyuryoku')">新規入力</button>
+  <button class="tab" onclick="showPage('dashboard')">集計</button>
+  <button class="tab" onclick="showPage('export')">書き出し</button>
+</div>
+
+<!-- 領収書 -->
+<div id="page-ryoshu" class="page active">
+  <div class="search-box">
+    <svg width="16" height="16" fill="none" stroke="#898781" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+    <input type="search" id="search-ryoshu" placeholder="店舗名・内容で検索" oninput="filterList('ryoshu')">
+  </div>
+  <div class="summary" id="summary-ryoshu"></div>
+  <div class="section-hdr">2026年度 領収書一覧</div>
+  <div id="list-ryoshu"></div>
+</div>
+
+<!-- 仕入請求書 -->
+<div id="page-shiire" class="page">
+  <div class="search-box">
+    <svg width="16" height="16" fill="none" stroke="#898781" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+    <input type="search" id="search-shiire" placeholder="請求元・件名で検索" oninput="filterList('shiire')">
+  </div>
+  <div class="summary" id="summary-shiire"></div>
+  <div class="section-hdr">2026年度 仕入請求書一覧</div>
+  <div id="list-shiire"></div>
+</div>
+
+<!-- 新規入力 -->
+<div id="page-nyuryoku" class="page">
+
+  <!-- カメラ撮影エリア -->
+  <div id="camera-area" style="margin-bottom:12px">
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <label for="photo-input" style="flex:1;background:#185FA5;color:#fff;border-radius:10px;padding:12px;text-align:center;font-size:15px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">
+        <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        写真から読み取る
+      </label>
+      <input type="file" id="photo-input" accept="image/*" capture="environment" style="display:none" onchange="handlePhoto(this)">
+    </div>
+    <div id="photo-preview" style="display:none;margin-bottom:10px">
+      <img id="preview-img" style="width:100%;max-height:200px;object-fit:contain;border-radius:8px;background:#f0ede8">
+      <div id="ocr-result" style="background:#E6F1FB;border-radius:8px;padding:10px;margin-top:8px;font-size:13px;color:#185FA5">読み取り中...</div>
+      <div id="api-key-area" style="margin-top:8px;display:none">
+        <div style="font-size:12px;color:#52514e;margin-bottom:4px">Claude API キー（初回のみ）</div>
+        <div style="display:flex;gap:6px">
+          <input type="password" id="api-key-input" placeholder="sk-ant-..." style="flex:1;padding:8px;border:0.5px solid rgba(0,0,0,0.15);border-radius:8px;font-size:13px">
+          <button onclick="runOCR()" style="padding:8px 14px;background:#185FA5;color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer">OCR実行</button>
+        </div>
+        <div style="font-size:11px;color:#898781;margin-top:4px">キーはこのデバイスに保存されます。漏洩しないよう注意ください。</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="form-card">
+    <div class="form-row">
+      <label>種別</label>
+      <select id="f-type">
+        <option value="ryoshu">領収書</option>
+        <option value="shiire">仕入請求書</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label>日付</label>
+      <input type="date" id="f-date">
+    </div>
+    <div class="form-row" id="f-name-row">
+      <label>店舗・支払先</label>
+      <input type="text" id="f-name" placeholder="例：セブンイレブン">
+    </div>
+    <div class="form-row" id="f-subject-row" style="display:none">
+      <label>請求元</label>
+      <input type="text" id="f-subject" placeholder="例：株式会社イトウ">
+    </div>
+    <div class="form-row" id="f-item-row" style="display:none">
+      <label>件名</label>
+      <input type="text" id="f-item" placeholder="例：配管材・管材">
+    </div>
+    <div class="form-row">
+      <label>内容</label>
+      <input type="text" id="f-content" placeholder="例：飲料・食品">
+    </div>
+    <div class="row2">
+      <div class="form-row">
+        <label>金額（税込）</label>
+        <input type="number" id="f-amount" placeholder="0">
+      </div>
+      <div class="form-row">
+        <label>支払方法</label>
+        <select id="f-payment">
+          <option>クレジット</option><option>QUICPay</option>
+          <option>振込</option><option>現金</option>
+          <option>AMEX</option><option>MasterCard</option><option>不明</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-row">
+      <label>勘定科目</label>
+      <select id="f-kanjou">
+        <option>会議費</option><option>消耗品費</option><option>交際費</option>
+        <option>旅費交通費</option><option>福利厚生費</option><option>仕入</option><option>その他</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label>インボイス番号（任意）</label>
+      <input type="text" id="f-invoice" placeholder="T1234567890123">
+    </div>
+    <div class="form-row">
+      <label>備考</label>
+      <input type="text" id="f-memo" placeholder="任意">
+    </div>
+    <button class="btn-submit" onclick="addEntry()">登録する</button>
+  </div>
+</div>
+
+<!-- 書き出し -->
+<div id="page-dashboard" class="page">
+  <div id="dash-kpi" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px"></div>
+  <div class="form-card" style="padding:14px">
+    <div style="font-size:13px;font-weight:500;margin-bottom:10px;color:#52514e">月別 売上 vs 仕入請求</div>
+    <div style="position:relative;height:180px"><canvas id="chart-uriage"></canvas></div>
+    <div style="font-size:10px;color:#898781;text-align:center;margin-top:6px">※売上は4・5月分のみ入力済み</div>
+  </div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+    <div class="form-card" style="padding:14px">
+      <div style="font-size:13px;font-weight:500;margin-bottom:10px;color:#52514e">月別 給与</div>
+      <div style="position:relative;height:150px"><canvas id="chart-kyuyo"></canvas></div>
+    </div>
+    <div class="form-card" style="padding:14px">
+      <div style="font-size:13px;font-weight:500;margin-bottom:10px;color:#52514e">仕入内訳</div>
+      <div style="position:relative;height:150px"><canvas id="chart-shiire-pie"></canvas></div>
+    </div>
+  </div>
+  <div style="background:#fff;border-radius:10px;border:0.5px solid rgba(0,0,0,0.1);padding:12px;margin-top:10px;font-size:12px;color:#52514e;line-height:1.7">
+    <div style="font-weight:500;margin-bottom:4px;font-size:13px">税理士への共有方法</div>
+    「書き出し」タブからCSVをダウンロード → メール添付または共有フォルダに保存。インボイス番号も含まれます。
+  </div>
+</div>
+
+<div id="page-export" class="page">
+
+  <!-- 税理士向け -->
+  <div style="background:#E6F1FB;border-radius:12px;padding:14px 16px;margin-bottom:14px;">
+    <div style="font-size:13px;font-weight:600;color:#185FA5;margin-bottom:6px;">🧾 税理士向けレポート</div>
+    <div style="font-size:12px;color:#52514e;margin-bottom:10px;line-height:1.6;">全データをHTML形式で書き出します。ブラウザで開いてそのまま印刷（PDF化）できます。メールやOneDriveで共有してください。</div>
+    <button class="btn-export" style="background:#185FA5;color:#fff;border-color:#185FA5;" onclick="exportTaxReport()">📄 税理士用レポートを作成</button>
+  </div>
+
+  <!-- CSV -->
+  <div class="section-hdr">CSV書き出し（Excel取込用）</div>
+  <button class="btn-export" onclick="exportCSV('ryoshu')">📥 領収書 CSV書き出し</button>
+  <button class="btn-export" onclick="exportCSV('shiire')">📥 仕入請求書 CSV書き出し</button>
+
+  <!-- バックアップ -->
+  <div class="section-hdr" style="margin-top:12px">データ管理</div>
+  <button class="btn-export" onclick="exportJSON()">💾 バックアップ（JSON）</button>
+  <button class="btn-export" onclick="importJSON()">📂 バックアップから復元</button>
+  <div style="font-size:12px;color:#898781;margin-top:6px;line-height:1.6;">別のデバイスで使うときはバックアップを取り出してから「復元」で読み込んでください。</div>
+
+  <div style="margin-top:16px;text-align:center;font-size:12px;color:#898781;">
+    iPhoneのSafariでこのページを開き<br>「共有」→「ホーム画面に追加」でアプリとして使えます
+  </div>
+</div>
+
+<!-- Detail Modal -->
+<div class="modal-overlay" id="modal" onclick="closeModal(event)">
+  <div class="modal" id="modal-content">
+    <div class="modal-handle"></div>
+    <div class="modal-title" id="modal-title"></div>
+    <div id="modal-body"></div>
+    <button class="modal-close" onclick="document.getElementById('modal').classList.remove('open')">閉じる</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ===== FIREBASE CONFIG =====
+// ↓ Firebaseコンソールからコピーした設定を貼り付けてください
+const firebaseConfig = {
+  apiKey: "AIzaSyD1JjUoyT9noxgNAChuwASvfva7Z4eCJFA",
+  authDomain: "furue-kaikei.firebaseapp.com",
+  databaseURL: "https://furue-kaikei-default-rtdb.firebaseio.com",
+  projectId: "furue-kaikei",
+  storageBucket: "furue-kaikei.firebasestorage.app",
+  messagingSenderId: "274251082229",
+  appId: "1:274251082229:web:58d849db1604895c8a58bc"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.database();
+
+// ===== DATA =====
+const RYOSHU_INIT = [{"No.": 1, "日付": "2026/06/19", "店舗・支払先": "セブンイレブン 愛西内佐屋", "内容": "飲料・食品", "金額（税込）": 1440, "支払方法": "クレジット", "勘定科目（参考）": "会議費", "備考": null}, {"No.": 2, "日付": "2026/06/22", "店舗・支払先": "FamilyMart 御前崎佐倉店", "内容": "食費（ファミチキ等）", "金額（税込）": 1713, "支払方法": "クレジット", "勘定科目（参考）": "会議費", "備考": null}, {"No.": 3, "日付": "2026/06/22", "店舗・支払先": "FamilyMart 御前崎佐倉店", "内容": "飲料（ソルティライチ等）", "金額（税込）": 436, "支払方法": "クレジット", "勘定科目（参考）": "会議費", "備考": "同日2件"}, {"No.": 4, "日付": "2026/06/22", "店舗・支払先": "AEON マックスバリュ浜岡店", "内容": "食料品", "金額（税込）": 2448, "支払方法": "クレジット", "勘定科目（参考）": "会議費", "備考": null}, {"No.": 5, "日付": "2026/06/23", "店舗・支払先": "すき家 御前崎池新田店", "内容": "食費", "金額（税込）": 2470, "支払方法": "クレジット", "勘定科目（参考）": "会議費", "備考": null}, {"No.": 6, "日付": "2026/06/23", "店舗・支払先": "セブンイレブン 御前崎福岡店", "内容": "飲料・食品", "金額（税込）": 771, "支払方法": "QUICPay", "勘定科目（参考）": "会議費", "備考": null}, {"No.": 7, "日付": "2026/06/25", "店舗・支払先": "ラーメン横綱 刈谷オアシス店", "内容": "食費", "金額（税込）": 2530, "支払方法": "クレジット", "勘定科目（参考）": "会議費", "備考": null}, {"No.": 8, "日付": "2026/06/27", "店舗・支払先": "DCM 21名沢見店", "内容": "工具（六角ドリルねじ等）", "金額（税込）": 3638, "支払方法": "クレジット", "勘定科目（参考）": "消耗品費", "備考": null}, {"No.": 9, "日付": "2026/07/02", "店舗・支払先": "すき家 御前崎池新田店", "内容": "食費（うな牛等）", "金額（税込）": 1950, "支払方法": "クレジット", "勘定科目（参考）": "会議費", "備考": null}, {"No.": 10, "日付": "2026/07/02", "店舗・支払先": "FamilyMart 御前崎佐倉店", "内容": "飲料", "金額（税込）": 300, "支払方法": "クレジット", "勘定科目（参考）": "会議費", "備考": null}, {"No.": 11, "日付": "2026/07/02", "店舗・支払先": "コメリ ハート&グリーン 新城一揆田", "内容": "消耗品（ステンレス握り手）", "金額（税込）": 348, "支払方法": "クレジット", "勘定科目（参考）": "消耗品費", "備考": null}, {"No.": 12, "日付": "2026/07/07", "店舗・支払先": "TOBI-BITO SWEETS TOKYO 羽田空港", "内容": "食品（接待土産）", "金額（税込）": 18264, "支払方法": "クレジット", "勘定科目（参考）": "交際費", "備考": null}, {"No.": 13, "日付": "2026/07/09", "店舗・支払先": "FamilyMart ポインター店（丹陽町）", "内容": "食費", "金額（税込）": 964, "支払方法": "QUICPay", "勘定科目（参考）": "会議費", "備考": null}, {"No.": 14, "日付": "2026/07/09", "店舗・支払先": "SuperVIVAHOME 名古屋南店", "内容": "消耗品（SDS等）", "金額（税込）": 3388, "支払方法": "クレジット", "勘定科目（参考）": "消耗品費", "備考": null}, {"No.": 15, "日付": "2026/07/09", "店舗・支払先": "三井のリパーク（福中町）", "内容": "駐車料金", "金額（税込）": 250, "支払方法": "不明", "勘定科目（参考）": "旅費交通費", "備考": null}, {"No.": 16, "日付": "2026/07/09", "店舗・支払先": "セブンイレブン 垂井町（岐阜）", "内容": "食費・飲料", "金額（税込）": 481, "支払方法": "QUICPay", "勘定科目（参考）": "会議費", "備考": null}, {"No.": 17, "日付": "2026/07/10", "店舗・支払先": "DCM 新城店", "内容": "工具（チューブ・板・テープ等）", "金額（税込）": 4240, "支払方法": "クレジット", "勘定科目（参考）": "消耗品費", "備考": null}, {"No.": 18, "日付": "2026/07/10", "店舗・支払先": "セブンイレブン 豊川宮町店", "内容": "飲料・食品", "金額（税込）": 589, "支払方法": "クレジット", "勘定科目（参考）": "会議費", "備考": null}, {"No.": 19, "日付": "2026/07/10", "店舗・支払先": "FamilyMart 豊川上店", "内容": "飲料・食品", "金額（税込）": 1155, "支払方法": "クレジット", "勘定科目（参考）": "会議費", "備考": null}, {"No.": 20, "日付": "2026/07/10", "店舗・支払先": "FamilyMart 新城一揆田店", "内容": "飲料", "金額（税込）": 947, "支払方法": "クレジット", "勘定科目（参考）": "会議費", "備考": null}, {"No.": 21, "日付": "2026/07/11", "店舗・支払先": "FamilyMart 三河一宮店", "内容": "飲料・食品", "金額（税込）": 641, "支払方法": "クレジット", "勘定科目（参考）": "会議費", "備考": null}, {"No.": 22, "日付": "2026/07/11", "店舗・支払先": "ケーズデンキ 各務原インター店", "内容": "電気製品（BRAUNシェーバー）", "金額（税込）": 6908, "支払方法": "AMEX", "勘定科目（参考）": "消耗品費", "備考": null}, {"No.": 23, "日付": "2026/07/11", "店舗・支払先": "ラーメン横綱 刈谷オアシス店", "内容": "食費（冷やし担々等）", "金額（税込）": 1360, "支払方法": "クレジット", "勘定科目（参考）": "会議費", "備考": null}, {"No.": 24, "日付": "2026/07/11", "店舗・支払先": "ラーメン横綱 刈谷オアシス店", "内容": "食費（ラーメン2名）", "金額（税込）": 2220, "支払方法": "クレジット", "勘定科目（参考）": "会議費", "備考": "同日2件"}, {"No.": 25, "日付": "2026/07/11", "店舗・支払先": "モノタロウ", "内容": "工具（エアーホースリール・エアーガン）", "金額（税込）": 37895, "支払方法": "クレジット", "勘定科目（参考）": "消耗品費", "備考": null}, {"No.": 26, "日付": "2026/07/12", "店舗・支払先": "Beisia 前橋嶋店", "内容": "食料品", "金額（税込）": 2147, "支払方法": "クレジット", "勘定科目（参考）": "会議費", "備考": null}, {"No.": 27, "日付": "2026/07/13", "店舗・支払先": "amazon.co.jp", "内容": "事務用品（マッキーノック細字黒×10）", "金額（税込）": 5283, "支払方法": "クレジット", "勘定科目（参考）": "消耗品費", "備考": null}, {"No.": 28, "日付": "2026/07/13", "店舗・支払先": "FamilyMart 南丹市園部町", "内容": "飲料", "金額（税込）": 150, "支払方法": "QUICPay", "勘定科目（参考）": "会議費", "備考": null}, {"No.": 29, "日付": "2026/07/13", "店舗・支払先": "セブンイレブン 羽島竹鼻", "内容": "飲料", "金額（税込）": 616, "支払方法": "QUICPay", "勘定科目（参考）": "会議費", "備考": null}, {"No.": 30, "日付": "2026/07/13", "店舗・支払先": "FamilyMart 新城一揆田店", "内容": "食費・飲料", "金額（税込）": 991, "支払方法": "クレジット", "勘定科目（参考）": "会議費", "備考": null}, {"No.": 31, "日付": "2026/07/14", "店舗・支払先": "CoCo壱番屋 中区松波三丁目", "内容": "食費", "金額（税込）": 1394, "支払方法": "QUICPay", "勘定科目（参考）": "会議費", "備考": null}, {"No.": 32, "日付": "2026/07/14", "店舗・支払先": "amazon.co.jp", "内容": "IoT機器（SwitchBot）", "金額（税込）": 4985, "支払方法": "クレジット", "勘定科目（参考）": "消耗品費", "備考": null}, {"No.": 33, "日付": "2026/07/14", "店舗・支払先": "セブンイレブン 名古屋福江三丁目", "内容": "飲料（コーヒー）", "金額（税込）": 250, "支払方法": "QUICPay", "勘定科目（参考）": "会議費", "備考": null}, {"No.": 34, "日付": "2026/07/14", "店舗・支払先": "焼肉（接客業 濃尾店/津島市）", "内容": "接待飲食", "金額（税込）": 7744, "支払方法": "QUICPay", "勘定科目（参考）": "交際費", "備考": null}, {"No.": 35, "日付": "2026/07/15", "店舗・支払先": "LAWSON", "内容": "飲料（アクエリアス等）", "金額（税込）": 1570, "支払方法": "クレジット", "勘定科目（参考）": "会議費", "備考": null}, {"No.": 36, "日付": "2026/07/16", "店舗・支払先": "PROsite 各務原インター店", "内容": "工具・消耗品", "金額（税込）": 27386, "支払方法": "クレジット", "勘定科目（参考）": "消耗品費", "備考": null}, {"No.": 37, "日付": "2026/07/16", "店舗・支払先": "セブンイレブン 弥富平島中", "内容": "食品等", "金額（税込）": 1594, "支払方法": "クレジット", "勘定科目（参考）": "会議費", "備考": null}, {"No.": 38, "日付": "2026/07/17", "店舗・支払先": "セブンイレブン 江南五明町天王", "内容": "飲料・菓子", "金額（税込）": 300, "支払方法": "QUICPay", "勘定科目（参考）": "会議費", "備考": null}, {"No.": 39, "日付": "2026/07/17", "店舗・支払先": "Beisia 前橋嶋店", "内容": "食料品", "金額（税込）": 2820, "支払方法": "MasterCard", "勘定科目（参考）": "会議費", "備考": null}, {"No.": 40, "日付": "2026/07/18", "店舗・支払先": "apollostation（有)石田屋商店", "内容": "燃料費（軽油5.64L）", "金額（税込）": 880, "支払方法": "クレジット", "勘定科目（参考）": "旅費交通費", "備考": null}, {"No.": 41, "日付": "2026/07/18", "店舗・支払先": "DRUGユタカファーマシー", "内容": "医薬・衛生用品", "金額（税込）": 1643, "支払方法": "QUICPay", "勘定科目（参考）": "福利厚生費", "備考": null}, {"No.": 42, "日付": "2026/07/18", "店舗・支払先": "焼肉（接客業）名古屋", "内容": "接待飲食", "金額（税込）": 15455, "支払方法": "クレジット", "勘定科目（参考）": "交際費", "備考": null}, {"No.": 43, "日付": "2026/07/19", "店舗・支払先": "モノタロウ", "内容": "消耗品（塩動3種ミックス）", "金額（税込）": 2158, "支払方法": "クレジット", "勘定科目（参考）": "消耗品費", "備考": null}, {"No.": 44, "日付": "2026/07/19", "店舗・支払先": "Cafe Bistro Parisien Le Beurre Noisette", "内容": "接待飲食（名古屋）", "金額（税込）": 10450, "支払方法": "AMEX", "勘定科目（参考）": "交際費", "備考": null}, {"No.": 45, "日付": "2026/07/20", "店舗・支払先": "FamilyMart 津島庵白店", "内容": "飲料（アクエリアス）", "金額（税込）": 416, "支払方法": "QUICPay", "勘定科目（参考）": "会議費", "備考": null}, {"No.": 46, "日付": "2026/07/21", "店舗・支払先": "土山サービスエリア お土産売店", "内容": "食品（お土産）", "金額（税込）": 1080, "支払方法": "クレジット", "勘定科目（参考）": "交際費", "備考": null}, {"No.": 47, "日付": "2026/07/22", "店舗・支払先": "LAWSON 大垣島里町店", "内容": "栄養ドリンク（即攻元気）", "金額（税込）": 237, "支払方法": "QUICPay", "勘定科目（参考）": "会議費", "備考": null}, {"No.": 48, "日付": "2026/07/22", "店舗・支払先": "LAWSON 大垣島里町店", "内容": "食品", "金額（税込）": 407, "支払方法": "QUICPay", "勘定科目（参考）": "会議費", "備考": "同日2件"}, {"No.": 49, "日付": "2026/07/22", "店舗・支払先": "セブンイレブン 愛西内佐屋", "内容": "食品", "金額（税込）": 3218, "支払方法": "クレジット", "勘定科目（参考）": "会議費", "備考": null}, {"No.": 50, "日付": "2026/07/22", "店舗・支払先": "CAINZ 御前崎嶋店", "内容": "消耗品", "金額（税込）": 348, "支払方法": "クレジット", "勘定科目（参考）": "消耗品費", "備考": null}, {"No.": 51, "日付": "2026/07/22", "店舗・支払先": "CAINZ 御前崎嶋店", "内容": "消耗品", "金額（税込）": 2928, "支払方法": "クレジット", "勘定科目（参考）": "消耗品費", "備考": "同日2件"}, {"No.": 52, "日付": "2026/07/22", "店舗・支払先": "モノタロウ", "内容": "消耗品（ステンレス換気口）", "金額（税込）": 692, "支払方法": "クレジット", "勘定科目（参考）": "消耗品費", "備考": null}, {"No.": 53, "日付": "2026/07/23", "店舗・支払先": "セブンイレブン 岡崎西蔵前", "内容": "栄養ドリンク（高麗人参）", "金額（税込）": 237, "支払方法": "QUICPay", "勘定科目（参考）": "会議費", "備考": null}, {"No.": 54, "日付": "2026/07/23", "店舗・支払先": "FamilyMart 名四飛島店", "内容": "消耗品等", "金額（税込）": 676, "支払方法": "クレジット", "勘定科目（参考）": "消耗品費", "備考": null}, {"No.": 55, "日付": "2026/07/23", "店舗・支払先": "CAINZ 御前崎嶋店", "内容": "消耗品（チャコ・ワッシャー等）", "金額（税込）": 754, "支払方法": "MasterCard", "勘定科目（参考）": "消耗品費", "備考": null}, {"No.": 56, "日付": "2026/07/24", "店舗・支払先": "セブンイレブン 愛西内佐屋", "内容": "食品", "金額（税込）": 3240, "支払方法": "クレジット", "勘定科目（参考）": "会議費", "備考": null}, {"No.": 57, "日付": "2026/07/24", "店舗・支払先": "LAWSON 東里野町店", "内容": "飲料・菓子", "金額（税込）": 295, "支払方法": "QUICPay", "勘定科目（参考）": "会議費", "備考": null}, {"No.": 58, "日付": "2026/07/23", "店舗・支払先": "セブンイレブン 名古屋砂原町店", "内容": "飲料・食品", "金額（税込）": 518, "支払方法": "QUICPay", "勘定科目（参考）": "会議費", "備考": null}, {"No.": 59, "日付": "2026/07/24", "店舗・支払先": "LAWSON 中区丸の内一丁目店", "内容": "飲料", "金額（税込）": 118, "支払方法": "QUICPay", "勘定科目（参考）": "会議費", "備考": null}, {"No.": "合　計", "日付": null, "店舗・支払先": null, "内容": null, "金額（税込）": 200326, "支払方法": null, "勘定科目（参考）": null, "備考": null}, {"No.": "※勘定科目は参考分類です。税理士に確認の上、修正してください。　※同日複数件は実際に異なる領収書です。", "日付": null, "店舗・支払先": null, "内容": null, "金額（税込）": null, "支払方法": null, "勘定科目（参考）": null, "備考": null}];
+const SHIIRE_INIT = [{"No.": 1, "日付": "2026/04/20", "請求元": "株式会社イトウ", "件名": "配管材・管材（4月）", "金額（税込）": 925400, "支払方法": "振込", "勘定科目（参考）": "仕入", "備考": null}, {"No.": 2, "日付": "2026/04/20", "請求元": "石原機械㈱", "件名": "工具・設備品（4月）", "金額（税込）": 307219, "支払方法": "振込", "勘定科目（参考）": "仕入", "備考": null}, {"No.": 3, "日付": "2026/04/21", "請求元": "クロミヤ商店㈱", "件名": "管材・配管材料（4月）", "金額（税込）": 6554741, "支払方法": "振込", "勘定科目（参考）": "仕入", "備考": null}, {"No.": 4, "日付": "2026/04/27", "請求元": "三浦工業㈱", "件名": "ボイラ・設備保守（4月）", "金額（税込）": 3991953, "支払方法": "振込", "勘定科目（参考）": "仕入", "備考": null}, {"No.": 5, "日付": "2026/04/30", "請求元": "丸彦長島運輸㈱", "件名": "運送（4月）", "金額（税込）": 232650, "支払方法": "振込", "勘定科目（参考）": "仕入", "備考": null}, {"No.": 6, "日付": "2026/04/30", "請求元": "松原保温", "件名": "蒸気管保温工事", "金額（税込）": 105300, "支払方法": "振込", "勘定科目（参考）": "仕入", "備考": null}, {"No.": 7, "日付": "2026/05/20", "請求元": "株式会社イトウ", "件名": "配管材・管材（5月）", "金額（税込）": 703512, "支払方法": "振込", "勘定科目（参考）": "仕入", "備考": null}, {"No.": 8, "日付": "2026/05/22", "請求元": "クロミヤ商店㈱", "件名": "管材・配管材料（5月）", "金額（税込）": 4456415, "支払方法": "振込", "勘定科目（参考）": "仕入", "備考": null}, {"No.": 9, "日付": "2026/05/30", "請求元": "三浦工業㈱", "件名": "ボイラ・設備保守（5月）", "金額（税込）": 492051, "支払方法": "振込", "勘定科目（参考）": "仕入", "備考": null}, {"No.": 10, "日付": "2026/05/31", "請求元": "BK alpha㈱", "件名": "建て（関ケ原製作所）", "金額（税込）": 365200, "支払方法": "振込", "勘定科目（参考）": "仕入", "備考": null}, {"No.": 11, "日付": "2026/06/20", "請求元": "株式会社イトウ", "件名": "配管材・管材（6月）", "金額（税込）": 137190, "支払方法": "振込", "勘定科目（参考）": "仕入", "備考": null}, {"No.": 12, "日付": "2026/06/22", "請求元": "クロミヤ商店㈱", "件名": "管材・配管材料（6月）", "金額（税込）": 4379979, "支払方法": "振込", "勘定科目（参考）": "仕入", "備考": null}, {"No.": 13, "日付": "2026/06/30", "請求元": "BK alpha㈱", "件名": "建て（トヨタ紡織大口）", "金額（税込）": 132000, "支払方法": "振込", "勘定科目（参考）": "仕入", "備考": null}, {"No.": 14, "日付": "2026/06/30", "請求元": "株式会社アイアール", "件名": "警備（日本耐酸壜等）", "金額（税込）": 79200, "支払方法": "振込", "勘定科目（参考）": "仕入", "備考": null}, {"No.": 15, "日付": "2026/06/30", "請求元": "太陽建機レンタル㈱", "件名": "12Mスカイマスターレンタル", "金額（税込）": 25998, "支払方法": "振込", "勘定科目（参考）": "仕入", "備考": null}, {"No.": 16, "日付": "2026/06/30", "請求元": "松岡商店", "件名": "管材・配管材料（6月）", "金額（税込）": 72176, "支払方法": "振込", "勘定科目（参考）": "仕入", "備考": null}, {"No.": 17, "日付": "2026/06/30", "請求元": "三浦工業㈱", "件名": "ボイラ・設備保守（6月）", "金額（税込）": 637731, "支払方法": "振込", "勘定科目（参考）": "仕入", "備考": null}, {"No.": 18, "日付": "2026/07/20", "請求元": "株式会社イトウ", "件名": "配管材・管材（7月）", "金額（税込）": 457601, "支払方法": "振込", "勘定科目（参考）": "仕入", "備考": null}, {"No.": 19, "日付": "2026/07/20", "請求元": "上田電気", "件名": "電気工事", "金額（税込）": 191000, "支払方法": "振込", "勘定科目（参考）": "仕入", "備考": null}, {"No.": 20, "日付": "2026/07/21", "請求元": "クロミヤ商店㈱", "件名": "管材・配管材料（7月）", "金額（税込）": 2793613, "支払方法": "振込", "勘定科目（参考）": "仕入", "備考": null}, {"No.": 21, "日付": "2026/07/23", "請求元": "株式会社美濃屋建築", "件名": "ワタキューセイモア名古屋支店 改修工事", "金額（税込）": 99000, "支払方法": "振込", "勘定科目（参考）": "仕入", "備考": null}, {"No.": "合　計", "日付": null, "請求元": null, "件名": null, "金額（税込）": 27139929, "支払方法": null, "勘定科目（参考）": null, "備考": null}, {"No.": "※勘定科目は参考分類です。税理士に確認の上、修正してください。", "日付": null, "請求元": null, "件名": null, "金額（税込）": null, "支払方法": null, "勘定科目（参考）": null, "備考": null}];
+
+// 写真はlocalStorageに保存（Firebaseには上げない）
+function getLocalPhotos() {
+  try { return JSON.parse(localStorage.getItem('furue_photos') || '{}'); } catch { return {}; }
+}
+function saveLocalPhoto(no, base64) {
+  const p = getLocalPhotos(); p[String(no)] = base64;
+  try { localStorage.setItem('furue_photos', JSON.stringify(p)); } catch {}
+}
+
+async function loadAllData() {
+  try {
+    const snap = await db.ref('furue').once('value');
+    const val = snap.val();
+    const photos = getLocalPhotos();
+    if (val && val.ryoshu) {
+      ryoshuData = val.ryoshu.filter(Boolean).map(r => ({...r, photo: photos[String(r['No.'])] || null}));
+    } else {
+      ryoshuData = RYOSHU_INIT.map(r => ({...r}));
+      db.ref('furue/ryoshu').set(ryoshuData.map(r => { const c={...r}; delete c.photo; return c; }));
+    }
+    if (val && val.shiire) {
+      shiireData = val.shiire.filter(Boolean);
+    } else {
+      shiireData = SHIIRE_INIT.map(r => ({...r}));
+      db.ref('furue/shiire').set(shiireData);
+    }
+  } catch(e) {
+    // オフライン時はlocalStorageにフォールバック
+    const sr = localStorage.getItem('furue_ryoshu');
+    const ss = localStorage.getItem('furue_shiire');
+    const photos = getLocalPhotos();
+    const raw = sr ? JSON.parse(sr) : RYOSHU_INIT.map(r=>({...r}));
+    ryoshuData = raw.map(r => ({...r, photo: r.photo || photos[String(r['No.'])] || null}));
+    shiireData = ss ? JSON.parse(ss) : SHIIRE_INIT.map(r=>({...r}));
+    showToast('オフラインモード（同期なし）');
+  }
+}
+
+function saveData(key, data) {
+  // Firebaseに保存（写真を除く）
+  const forFb = data.map(r => { const c={...r}; delete c.photo; return c; });
+  db.ref('furue/'+key).set(forFb).catch(() => showToast('同期エラー（ローカル保存済み）'));
+  // localStorageにもバックアップ
+  try { localStorage.setItem('furue_'+key, JSON.stringify(data)); } catch {}
+}
+
+let ryoshuData = [];
+let shiireData = [];
+
+// ===== TABS =====
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  const idx = {'ryoshu':0,'shiire':1,'nyuryoku':2,'dashboard':3,'export':4}[name];
+  document.querySelectorAll('.tab')[idx].classList.add('active');
+  if (name === 'ryoshu') renderList('ryoshu');
+  if (name === 'shiire') renderList('shiire');
+  if (name === 'dashboard') renderDashboard();
+}
+
+// ===== DASHBOARD =====
+let dashCharts = {};
+function renderDashboard() {
+  // KPI
+  const rTotal = ryoshuData.reduce((s,r)=>s+(Number(r['金額（税込）'])||0),0);
+  const sTotal = shiireData.reduce((s,r)=>s+(Number(r['金額（税込）'])||0),0);
+  const kyuyoTotal = [286179,215745,230016,325751,380625,309495,306260,306260,343750,379699,338422,400038].reduce((a,b)=>a+b,0);
+  const kpiEl = document.getElementById('dash-kpi');
+  kpiEl.innerHTML = `
+    <div style="background:#E6F1FB;border-radius:10px;padding:12px">
+      <div style="font-size:11px;color:#185FA5;margin-bottom:3px">領収書合計</div>
+      <div style="font-size:20px;font-weight:600;color:#185FA5">¥${rTotal.toLocaleString()}</div>
+      <div style="font-size:11px;color:#378ADD">${ryoshuData.length}件</div>
+    </div>
+    <div style="background:#FAEEDA;border-radius:10px;padding:12px">
+      <div style="font-size:11px;color:#BA7517;margin-bottom:3px">仕入請求合計</div>
+      <div style="font-size:20px;font-weight:600;color:#BA7517">¥${sTotal.toLocaleString()}</div>
+      <div style="font-size:11px;color:#EF9F27">${shiireData.length}件</div>
+    </div>`;
+
+  const months=['4月','5月','6月','7月','8月','9月','10月','11月','12月','1月','2月','3月'];
+  const uriage=[35758100,21740370,0,0,0,0,0,0,0,0,0,0];
+  const shiireM=[12117263,6017178,5464274,3541214,0,0,0,0,0,0,0,0];
+  const kyuyo=[286179,215745,230016,325751,380625,309495,306260,306260,343750,379699,338422,400038];
+
+  function mkChart(id, cfg) {
+    if (dashCharts[id]) { dashCharts[id].destroy(); }
+    const el = document.getElementById(id);
+    if (el) dashCharts[id] = new Chart(el, cfg);
+  }
+
+  const tiny = {responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{font:{size:10},boxWidth:10}},tooltip:{callbacks:{label:c=>'¥'+c.raw.toLocaleString()}}},scales:{x:{ticks:{font:{size:9}}},y:{ticks:{callback:v=>v>=1000000?'¥'+(v/1000000).toFixed(0)+'M':'¥'+(v/10000).toFixed(0)+'万',font:{size:9}},grid:{color:'rgba(0,0,0,0.04)'}}}};
+
+  mkChart('chart-uriage',{type:'bar',data:{labels:months,datasets:[{label:'売上',data:uriage,backgroundColor:'#185FA5',borderRadius:3},{label:'仕入',data:shiireM,backgroundColor:'#EF9F27',borderRadius:3}]},options:tiny});
+  mkChart('chart-kyuyo',{type:'line',data:{labels:months,datasets:[{label:'給与',data:kyuyo,borderColor:'#A32D2D',backgroundColor:'rgba(163,45,45,0.1)',borderWidth:2,pointRadius:2,tension:0.3,fill:true}]},options:{...tiny,plugins:{...tiny.plugins,legend:{display:false}}}});
+  mkChart('chart-shiire-pie',{type:'doughnut',data:{labels:['4月','5月','6月','7月'],datasets:[{data:[12117263,6017178,5464274,3541214],backgroundColor:['#185FA5','#0C447C','#378ADD','#85B7EB'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:9},boxWidth:8}},tooltip:{callbacks:{label:c=>'¥'+(c.raw/10000).toFixed(0)+'万'}}},cutout:'55%'}});
+}
+
+// ===== RENDER =====
+function fmt(n) {
+  if (!n && n !== 0) return '—';
+  return '¥'+Number(n).toLocaleString();
+}
+
+function renderList(type) {
+  const data = type === 'ryoshu' ? ryoshuData : shiireData;
+  const q = document.getElementById('search-'+type).value.toLowerCase();
+  const filtered = q ? data.filter(r => {
+    const s = type==='ryoshu' ? r['店舗・支払先'] : r['請求元'];
+    const c = type==='ryoshu' ? r['内容'] : r['件名'];
+    return (s||'').toLowerCase().includes(q)||(c||'').toLowerCase().includes(q);
+  }) : data;
+
+  const total = filtered.reduce((s,r) => s+(Number(r['金額（税込）'])||0), 0);
+  const noInvoice = filtered.filter(r => !r['インボイス番号']).length;
+  const sumEl = document.getElementById('summary-'+type);
+  sumEl.innerHTML = `<div><div class="summary-label">${filtered.length}件合計</div><div class="summary-amount">${fmt(total)}</div></div><div style="text-align:right"><div class="summary-label">インボイス未入力</div><div style="font-size:18px;font-weight:600">${noInvoice}件</div></div>`;
+
+  const container = document.getElementById('list-'+type);
+  if (filtered.length === 0) {
+    container.innerHTML = '<div style="text-align:center;padding:40px;color:#898781;font-size:14px;">データがありません</div>';
+    return;
+  }
+  container.innerHTML = filtered.map((r,i) => {
+    const name = type==='ryoshu' ? r['店舗・支払先'] : r['請求元'];
+    const sub = type==='ryoshu' ? r['内容'] : r['件名'];
+    const inv = r['インボイス番号'];
+    const badge = inv ? `<span class="badge ok">✓ インボイス</span>` : `<span class="badge">インボイス未入力</span>`;
+    return `<div class="entry" onclick="showDetail('${type}',${data.indexOf(r)})">
+      <div class="entry-top"><span class="entry-name">${name||''}</span><span class="entry-amount">${fmt(r['金額（税込）'])}</span></div>
+      <div class="entry-sub">${r['日付']||''} · ${r['支払方法']||''} · ${sub||''} ${badge}</div>
+    </div>`;
+  }).join('');
+}
+
+function filterList(type) { renderList(type); }
+
+// ===== DETAIL MODAL =====
+function showDetail(type, idx) {
+  const r = (type==='ryoshu' ? ryoshuData : shiireData)[idx];
+  const nameKey = type==='ryoshu' ? '店舗・支払先' : '請求元';
+  document.getElementById('modal-title').textContent = r[nameKey]||'詳細';
+  const fields = type==='ryoshu'
+    ? [['日付',r['日付']],['内容',r['内容']],['金額（税込）',fmt(r['金額（税込）'])],['支払方法',r['支払方法']],['勘定科目',r['勘定科目（参考）']],['備考',r['備考']],['インボイス番号',r['インボイス番号']||'未入力']]
+    : [['日付',r['日付']],['件名',r['件名']],['金額（税込）',fmt(r['金額（税込）'])],['支払方法',r['支払方法']],['勘定科目',r['勘定科目（参考）']],['備考',r['備考']],['インボイス番号',r['インボイス番号']||'未入力']];
+  const photoBtn = (type==='ryoshu' && r['photo'])
+    ? `<button onclick="showPhoto('${type}',${idx})" style="width:100%;padding:11px;background:#E6F1FB;color:#185FA5;border:none;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer;margin-bottom:10px;">📷 原紙を見る</button>`
+    : '';
+  document.getElementById('modal-body').innerHTML = photoBtn + fields.map(([k,v])=>
+    `<div class="detail-row"><span class="detail-label">${k}</span><span class="detail-value">${v||'—'}</span></div>`
+  ).join('') +
+  `<div style="margin-top:12px;font-size:13px;font-weight:500;color:#52514e;">インボイス番号を入力</div>
+   <div class="invoice-field">
+     <input type="text" id="inv-input" placeholder="T1234567890123" value="${r['インボイス番号']||''}">
+     <button onclick="saveInvoice('${type}',${idx})">保存</button>
+   </div>`;
+  document.getElementById('modal').classList.add('open');
+}
+
+function showPhoto(type, idx) {
+  const r = (type==='ryoshu' ? ryoshuData : shiireData)[idx];
+  if (!r['photo']) return;
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:400;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px';
+  overlay.innerHTML = `
+    <img src="data:image/jpeg;base64,${r['photo']}" style="max-width:100%;max-height:80vh;border-radius:8px;object-fit:contain">
+    <button onclick="this.parentElement.remove()" style="margin-top:16px;padding:10px 32px;background:#fff;border:none;border-radius:10px;font-size:15px;cursor:pointer;font-weight:500">閉じる</button>`;
+  document.body.appendChild(overlay);
+}
+
+function saveInvoice(type, idx) {
+  const val = document.getElementById('inv-input').value.trim();
+  const data = type==='ryoshu' ? ryoshuData : shiireData;
+  data[idx]['インボイス番号'] = val || null;
+  saveData(type, data);
+  document.getElementById('modal').classList.remove('open');
+  renderList(type);
+  showToast('インボイス番号を保存しました');
+}
+
+function closeModal(e) {
+  if (e.target === document.getElementById('modal')) document.getElementById('modal').classList.remove('open');
+}
+
+// ===== ADD ENTRY =====
+document.getElementById('f-type').addEventListener('change', function() {
+  const isShiire = this.value === 'shiire';
+  document.getElementById('f-name-row').style.display = isShiire ? 'none' : '';
+  document.getElementById('f-subject-row').style.display = isShiire ? '' : 'none';
+  document.getElementById('f-item-row').style.display = isShiire ? '' : 'none';
+});
+
+// Set today's date
+document.getElementById('f-date').value = new Date().toISOString().split('T')[0];
+
+function addEntry() {
+  const type = document.getElementById('f-type').value;
+  const date = document.getElementById('f-date').value;
+  const amount = document.getElementById('f-amount').value;
+  if (!date || !amount) { showToast('日付と金額は必須です'); return; }
+
+  const isShiire = type === 'shiire';
+  const data = isShiire ? shiireData : ryoshuData;
+  const newNo = (data.length > 0 ? Math.max(...data.map(r=>Number(r['No.'])||0)) : 0) + 1;
+
+  const entry = {
+    'No.': newNo,
+    '日付': date,
+    '金額（税込）': Number(amount),
+    '支払方法': document.getElementById('f-payment').value,
+    '勘定科目（参考）': document.getElementById('f-kanjou').value,
+    '備考': document.getElementById('f-memo').value || null,
+    'インボイス番号': document.getElementById('f-invoice').value || null,
+  };
+  if (isShiire) {
+    entry['請求元'] = document.getElementById('f-subject').value;
+    entry['件名'] = document.getElementById('f-item').value || document.getElementById('f-content').value;
+  } else {
+    entry['店舗・支払先'] = document.getElementById('f-name').value;
+    entry['内容'] = document.getElementById('f-content').value;
+  }
+  // 写真があれば原紙として保存（ローカルのみ）
+  if (!isShiire && currentPhotoBase64) {
+    entry['photo'] = currentPhotoBase64;
+    saveLocalPhoto(newNo, currentPhotoBase64);
+    currentPhotoBase64 = null;
+    document.getElementById('photo-preview').style.display = 'none';
+    document.getElementById('photo-input').value = '';
+  }
+
+  data.push(entry);
+  saveData(type, data);
+  showToast('登録しました！');
+  document.getElementById('f-amount').value='';
+  document.getElementById('f-name').value='';
+  document.getElementById('f-content').value='';
+  document.getElementById('f-invoice').value='';
+  document.getElementById('f-memo').value='';
+  showPage(type==='ryoshu'?'ryoshu':'shiire');
+}
+
+// ===== EXPORT CSV =====
+function exportCSV(type) {
+  const data = type==='ryoshu' ? ryoshuData : shiireData;
+  const headers = type==='ryoshu'
+    ? ['No.','日付','店舗・支払先','内容','金額（税込）','支払方法','勘定科目（参考）','備考','インボイス番号']
+    : ['No.','日付','請求元','件名','金額（税込）','支払方法','勘定科目（参考）','備考','インボイス番号'];
+  const rows = [headers, ...data.map(r => headers.map(h => r[h]??''))];
+  const csv = rows.map(r => r.map(v => `"${String(v||'').replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `furue_${type}_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+  showToast('CSVを書き出しました');
+}
+
+// ===== PHOTO OCR =====
+let currentPhotoBase64 = null;
+
+function handlePhoto(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    currentPhotoBase64 = e.target.result.split(',')[1];
+    document.getElementById('preview-img').src = e.target.result;
+    document.getElementById('photo-preview').style.display = 'block';
+    const savedKey = localStorage.getItem('furue_api_key');
+    if (savedKey) {
+      runOCR();
+    } else {
+      document.getElementById('ocr-result').textContent = 'APIキーを入力してOCRを実行してください';
+      document.getElementById('api-key-area').style.display = 'block';
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
+async function runOCR() {
+  const keyInput = document.getElementById('api-key-input').value.trim();
+  const savedKey = localStorage.getItem('furue_api_key');
+  const apiKey = keyInput || savedKey;
+  if (!apiKey) { showToast('APIキーを入力してください'); return; }
+  if (keyInput) localStorage.setItem('furue_api_key', keyInput);
+
+  const resultEl = document.getElementById('ocr-result');
+  resultEl.textContent = '🔍 画像を解析中...';
+  document.getElementById('api-key-area').style.display = 'none';
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 300,
+        messages: [{
+          role: 'user',
+          content: [{
+            type: 'image',
+            source: { type: 'base64', media_type: 'image/jpeg', data: currentPhotoBase64 }
+          }, {
+            type: 'text',
+            text: 'この領収書・レシートから以下をJSON形式で抽出してください。{"date":"YYYY-MM-DD","name":"店舗名","content":"購入内容","amount":金額(数字のみ),"payment":"支払方法","invoice":"インボイス登録番号T+13桁またはnull"}。不明な場合はnull。JSONのみ返答。'
+          }]
+        }]
+      })
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message);
+    const text = data.content[0].text.trim();
+    const parsed = JSON.parse(text.replace(/```json\n?|\n?```/g,'').trim());
+
+    if (parsed.date) document.getElementById('f-date').value = parsed.date;
+    if (parsed.name) document.getElementById('f-name').value = parsed.name;
+    if (parsed.content) document.getElementById('f-content').value = parsed.content;
+    if (parsed.amount) document.getElementById('f-amount').value = parsed.amount;
+    if (parsed.payment) {
+      const sel = document.getElementById('f-payment');
+      [...sel.options].forEach(o => { if (o.value.includes(parsed.payment)) sel.value = o.value; });
+    }
+    if (parsed.invoice) document.getElementById('f-invoice').value = parsed.invoice;
+    resultEl.innerHTML = `✅ 読み取り完了 — <b>${parsed.name||''}</b> ¥${(parsed.amount||0).toLocaleString()}${parsed.invoice ? `<br><span style="font-size:11px">📋 インボイス番号: ${parsed.invoice}</span>` : ''}<br><span style="font-size:11px;opacity:0.8">内容を確認して「登録する」を押してください</span>`;
+    resultEl.style.background = '#d1f7e0'; resultEl.style.color = '#155724';
+    showToast('フォームに自動入力しました');
+  } catch(e) {
+    resultEl.textContent = '読み取りエラー: ' + e.message;
+    resultEl.style.background = '#FCEBEB'; resultEl.style.color = '#A32D2D';
+    document.getElementById('api-key-area').style.display = 'block';
+  }
+}
+
+// ===== TAX ACCOUNTANT REPORT =====
+function exportTaxReport() {
+  const today = new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'});
+  const rRows = ryoshuData.filter(r => typeof r['No.'] === 'number');
+  const sRows = shiireData.filter(r => typeof r['No.'] === 'number');
+  const rTotal = rRows.reduce((s,r)=>s+(Number(r['金額（税込）'])||0),0);
+  const sTotal = sRows.reduce((s,r)=>s+(Number(r['金額（税込）'])||0),0);
+  const makeRows = (rows, cols) => rows.map(r => `<tr>${cols.map(k=>`<td${k.startsWith('金額')?` class="amount"`:''}>` + (k.startsWith('金額') ? '¥'+(r[k]||0).toLocaleString() : (r[k]||'')) + `</td>`).join('')}</tr>`).join('');
+  const html = `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>㈲フルエ 会計資料 ${today}</title><style>
+body{font-family:-apple-system,'Hiragino Sans','Yu Gothic',sans-serif;padding:24px;font-size:12px;color:#0b0b0b;max-width:1000px;margin:0 auto}
+h1{font-size:20px;margin-bottom:2px}
+.sub{color:#666;font-size:12px;margin-bottom:20px}
+.kpis{display:flex;gap:12px;margin-bottom:24px;flex-wrap:wrap}
+.kpi{background:#f5f5f0;border-radius:8px;padding:12px 18px;min-width:160px}
+.kpi-label{font-size:11px;color:#666;margin-bottom:2px}
+.kpi-value{font-size:20px;font-weight:700}
+.kpi-sub{font-size:11px;color:#888;margin-top:2px}
+h2{font-size:14px;font-weight:600;margin:28px 0 10px;padding-bottom:5px;border-bottom:2px solid #185FA5;color:#185FA5}
+table{width:100%;border-collapse:collapse;font-size:11px}
+th{background:#185FA5;color:#fff;padding:5px 7px;text-align:left;font-weight:500}
+td{padding:5px 7px;border-bottom:0.5px solid #e5e5e5;vertical-align:top}
+tr:nth-child(even) td{background:#f8f8f8}
+.amount{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.total-row td{font-weight:700;background:#EAF2FF!important;border-top:1px solid #185FA5}
+.note{font-size:10px;color:#888;margin-top:5px}
+@media print{
+  .no-print{display:none}
+  h2{page-break-before:auto}
+  @page{margin:15mm}
+}
+</style></head><body>
+<div class="no-print" style="background:#185FA5;color:#fff;padding:10px 14px;border-radius:8px;margin-bottom:16px;font-size:12px">
+  ブラウザの「印刷」→「PDF に保存」で印刷できます &nbsp;
+  <button onclick="window.print()" style="background:#fff;color:#185FA5;border:none;border-radius:6px;padding:4px 12px;cursor:pointer;font-weight:600">🖨️ 印刷</button>
+</div>
+<h1>㈲有限会社フルエ　会計資料</h1>
+<div class="sub">2026年度（2026年4月〜）　作成日：${today}　※税理士確認用</div>
+<div class="kpis">
+  <div class="kpi"><div class="kpi-label">領収書 合計</div><div class="kpi-value">¥${rTotal.toLocaleString()}</div><div class="kpi-sub">${rRows.length}件</div></div>
+  <div class="kpi"><div class="kpi-label">仕入請求書 合計</div><div class="kpi-value">¥${sTotal.toLocaleString()}</div><div class="kpi-sub">${sRows.length}件</div></div>
+</div>
+<h2>領収書一覧</h2>
+<table><tr><th>No.</th><th>日付</th><th>店舗・支払先</th><th>内容</th><th style="text-align:right">金額（税込）</th><th>支払方法</th><th>勘定科目（参考）</th><th>インボイス番号</th><th>備考</th></tr>
+${makeRows(rRows, ['No.','日付','店舗・支払先','内容','金額（税込）','支払方法','勘定科目（参考）','インボイス番号','備考'])}
+<tr class="total-row"><td colspan="4">合　計</td><td class="amount">¥${rTotal.toLocaleString()}</td><td colspan="4"></td></tr></table>
+<div class="note">※勘定科目は参考分類です。税理士にご確認の上、修正してください。</div>
+<h2>仕入請求書一覧</h2>
+<table><tr><th>No.</th><th>日付</th><th>請求元</th><th>件名</th><th style="text-align:right">金額（税込）</th><th>支払方法</th><th>勘定科目（参考）</th><th>インボイス番号</th><th>備考</th></tr>
+${makeRows(sRows, ['No.','日付','請求元','件名','金額（税込）','支払方法','勘定科目（参考）','インボイス番号','備考'])}
+<tr class="total-row"><td colspan="4">合　計</td><td class="amount">¥${sTotal.toLocaleString()}</td><td colspan="4"></td></tr></table>
+<div class="note">※勘定科目は参考分類です。税理士にご確認の上、修正してください。</div>
+</body></html>`;
+
+  const blob = new Blob([html], {type:'text/html;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `furue_zeirishi_${new Date().toISOString().slice(0,10)}.html`;
+  a.click();
+  showToast('税理士用レポートを書き出しました');
+}
+
+// ===== JSON BACKUP =====
+function exportJSON() {
+  const allData = { ryoshu: ryoshuData, shiire: shiireData, exported: new Date().toISOString() };
+  const blob = new Blob([JSON.stringify(allData, null, 2)], {type:'application/json;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `furue_backup_${new Date().toISOString().slice(0,10)}.json`;
+  a.click();
+  showToast('バックアップを保存しました');
+}
+
+function importJSON() {
+  const inp = document.createElement('input');
+  inp.type = 'file'; inp.accept = '.json';
+  inp.onchange = e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const d = JSON.parse(ev.target.result);
+        if (d.ryoshu) { ryoshuData = d.ryoshu; saveData('ryoshu', ryoshuData); }
+        if (d.shiire) { shiireData = d.shiire; saveData('shiire', shiireData); }
+        showToast('データを復元しました (' + (d.exported||'').slice(0,10) + ')');
+        showPage('ryoshu');
+      } catch { showToast('ファイルの読み込みに失敗しました'); }
+    };
+    reader.readAsText(file);
+  };
+  inp.click();
+}
+
+// ===== TOAST =====
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// Init — Firebaseからデータ読み込み後に表示
+(function() {
+  const loadingEl = document.createElement('div');
+  loadingEl.id = 'fb-loading';
+  loadingEl.style.cssText = 'position:fixed;inset:0;background:#f5f5f0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:500;gap:12px';
+  loadingEl.innerHTML = '<div style="width:36px;height:36px;border:3px solid #e0e0e0;border-top-color:#185FA5;border-radius:50%;animation:spin 0.8s linear infinite"></div><div style="font-size:14px;color:#52514e">データを読み込み中...</div><style>@keyframes spin{to{transform:rotate(360deg)}}</style>';
+  document.body.appendChild(loadingEl);
+  loadAllData().then(() => { loadingEl.remove(); renderList('ryoshu'); });
+})();
+</script>
+</body>
+</html>

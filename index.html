@@ -461,7 +461,7 @@ function renderList(type) {
     const sub = type==='ryoshu' ? r['内容'] : r['件名'];
     const inv = r['インボイス番号'];
     const badge = inv ? `<span class="badge ok">✓ インボイス</span>` : `<span class="badge">インボイス未入力</span>`;
-    const pdfBtn = (type==='shiire' && r['原紙PDF']) ? `<button onclick="event.stopPropagation();openInvoicePDF('${r['原紙PDF'].replace(/'/g,"\\'")}');" style="padding:3px 8px;background:#E6F1FB;color:#185FA5;border:none;border-radius:6px;font-size:12px;cursor:pointer;margin-left:6px;">📄 原紙</button>` : '';
+    const pdfBtn = r['原紙PDF'] ? `<button onclick="event.stopPropagation();openInvoicePDF('${r['原紙PDF'].replace(/'/g,"\\'")}');" style="padding:3px 8px;background:#E6F1FB;color:#185FA5;border:none;border-radius:6px;font-size:12px;cursor:pointer;margin-left:6px;">📄 原紙</button>` : '';
     return `<div class="entry" onclick="showDetail('${type}',${data.indexOf(r)})">
       <div class="entry-top"><span class="entry-name">${name||''}</span><span class="entry-amount">${fmt(r['金額（税込）'])}</span></div>
       <div class="entry-sub">${r['日付']||''} · ${r['支払方法']||''} · ${sub||''} ${badge}${pdfBtn}</div>
@@ -482,7 +482,7 @@ function showDetail(type, idx) {
   const photoBtn = (type==='ryoshu' && r['photo'])
     ? `<button onclick="showPhoto('${type}',${idx})" style="width:100%;padding:11px;background:#E6F1FB;color:#185FA5;border:none;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer;margin-bottom:10px;">📷 原紙を見る（写真）</button>`
     : '';
-  const pdfViewBtn = (type==='shiire' && r['原紙PDF'])
+  const pdfViewBtn = r['原紙PDF']
     ? `<button onclick="openInvoicePDF('${r['原紙PDF'].replace(/'/g,"\\'")}');" style="width:100%;padding:11px;background:#E6F1FB;color:#185FA5;border:none;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer;margin-bottom:10px;">📄 請求書原紙を開く（OneDrive）</button>`
     : '';
   const invoiceSection = type==='ryoshu'
@@ -493,7 +493,7 @@ function showDetail(type, idx) {
    </div>` : '';
   document.getElementById('modal-body').innerHTML = photoBtn + pdfViewBtn + fields.map(([k,v])=>
     `<div class="detail-row"><span class="detail-label">${k}</span><span class="detail-value">${v||'—'}</span></div>`
-  ).join('') + invoiceSection;
+  ).join('') + pdfInputSection + invoiceSection;
   document.getElementById('modal').classList.add('open');
 }
 
@@ -516,6 +516,16 @@ function saveInvoice(type, idx) {
   document.getElementById('modal').classList.remove('open');
   renderList(type);
   showToast('インボイス番号を保存しました');
+}
+
+function savePDFLink(type, idx) {
+  const val = document.getElementById('pdf-input').value.trim();
+  const data = type==='ryoshu' ? ryoshuData : shiireData;
+  data[idx]['原紙PDF'] = val || null;
+  saveData(type, data);
+  document.getElementById('modal').classList.remove('open');
+  renderList(type);
+  showToast('PDFファイル名を保存しました');
 }
 
 function closeModal(e) {
@@ -633,7 +643,7 @@ function addEntry() {
 function exportCSV(type) {
   const data = type==='ryoshu' ? ryoshuData : shiireData;
   const headers = type==='ryoshu'
-    ? ['No.','日付','店舗・支払先','内容','金額（税込）','支払方法','勘定科目（参考）','備考','インボイス番号']
+    ? ['No.','日付','店舗・支払先','内容','金額（税込）','支払方法','勘定科目（参考）','備考','インボイス番号','添付PDF']
     : ['No.','日付','請求元','件名','金額（税込）','支払方法','勘定科目（参考）','備考','原紙PDF'];
   const rows = [headers, ...data.map(r => headers.map(h => r[h]??''))];
   const csv = rows.map(r => r.map(v => `"${String(v||'').replace(/"/g,'""')}"`).join(',')).join('\n');

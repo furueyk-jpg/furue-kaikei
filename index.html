@@ -110,6 +110,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;ba
   <button class="tab" onclick="showPage('dashboard')">集計</button>
   <button class="tab" onclick="showPage('export')">書き出し</button>
   <button class="tab" onclick="showPage('kyuyo')">給与・勤務</button>
+  <button class="tab" onclick="showPage('credit')">クレジット</button>
 </div>
 
 <!-- 領収書 -->
@@ -361,6 +362,12 @@ async function loadAllData() {
       shiireData = SHIIRE_INIT.map(r => ({...r}));
       db.ref('furue/shiire').set(sanitizeForFb(shiireData));
     }
+    if (val && val.credit) {
+      creditData = val.credit;
+    } else {
+      const sc = localStorage.getItem('furue_credit');
+      if (sc) creditData = JSON.parse(sc);
+    }
   } catch(e) {
     // オフライン時はlocalStorageにフォールバック
     const sr = localStorage.getItem('furue_ryoshu');
@@ -369,6 +376,8 @@ async function loadAllData() {
     const raw = sr ? JSON.parse(sr) : RYOSHU_INIT.map(r=>({...r}));
     ryoshuData = raw.map(r => ({...r, photo: r.photo || photos[String(r['No.'])] || null}));
     shiireData = ss ? JSON.parse(ss) : SHIIRE_INIT.map(r=>({...r}));
+    const sc = localStorage.getItem('furue_credit');
+    if (sc) creditData = JSON.parse(sc);
     showToast('オフラインモード（同期なし）');
   }
 }
@@ -389,12 +398,13 @@ function showPage(name) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.getElementById('page-'+name).classList.add('active');
-  const idx = {'ryoshu':0,'shiire':1,'nyuryoku':2,'dashboard':3,'export':4,'kyuyo':5}[name];
+  const idx = {'ryoshu':0,'shiire':1,'nyuryoku':2,'dashboard':3,'export':4,'kyuyo':5,'credit':6}[name];
   document.querySelectorAll('.tab')[idx].classList.add('active');
   if (name === 'ryoshu') renderList('ryoshu');
   if (name === 'shiire') renderList('shiire');
   if (name === 'dashboard') renderDashboard();
   if (name === 'kyuyo') initKyuyoPage();
+  if (name === 'credit') renderCreditPage();
 }
 
 // ===== DASHBOARD =====
@@ -551,7 +561,7 @@ const ONEDRIVE_BASE = 'https://furuenet-my.sharepoint.com/personal/yk_furuenet_o
 
 const RYOSHU_PDF_BASE = 'https://furuenet-my.sharepoint.com/personal/yk_furuenet_onmicrosoft_com/Documents/' +
   encodeURIComponent('(有)フルエ') + '/' + encodeURIComponent('(有)フルエ総務') + '/' +
-  encodeURIComponent('領収書') + '/split/';
+  encodeURIComponent('領収書') + '/' + encodeURIComponent('個別') + '/';
 
 function openInvoicePDF(filename) {
   if (!filename) return;
@@ -611,24 +621,24 @@ async function migrateData() {
 async function addRyoshu26Records() {
   if (!confirm('領収書26.xlsx（2026年5〜6月）の18件をPDFリンク付きで追加します。よろしいですか？')) return;
   const newRecords = [
-    {"日付":"2026/06/01","店舗・支払先":"GENKY 愛石店","内容":"スーパードライム","金額（税込）":1628,"支払方法":"クレジット（JCB）","勘定科目（参考）":"会議費","備考":null,"インボイス番号":"T9210001007535","原紙PDF":"142109_02.pdf"},
-    {"日付":"2026/05/26","店舗・支払先":"五味八珍FC浜岡店","内容":"お食事代","金額（税込）":7205,"支払方法":"不明","勘定科目（参考）":"会議費","備考":null,"インボイス番号":"T2080402018093","原紙PDF":"142109_03.pdf"},
-    {"日付":"2026/05/26","店舗・支払先":"中華料理店 小雪","内容":"お食事代","金額（税込）":0,"支払方法":"不明","勘定科目（参考）":"会議費","備考":"金額不明","インボイス番号":null,"原紙PDF":"142109_04.pdf"},
-    {"日付":"2026/05/27","店舗・支払先":"地魚料理 一","内容":"お食事代","金額（税込）":10100,"支払方法":"不明","勘定科目（参考）":"会議費","備考":null,"インボイス番号":"T3080401015256","原紙PDF":"142109_05.pdf"},
-    {"日付":"2026/05/28","店舗・支払先":"PUNTOMINO","内容":"お食事代","金額（税込）":5900,"支払方法":"不明","勘定科目（参考）":"会議費","備考":null,"インボイス番号":null,"原紙PDF":"142109_06.pdf"},
-    {"日付":"2026/05/28","店舗・支払先":"S-LAND PARK 名駅2丁目第2","内容":"駐車料金","金額（税込）":500,"支払方法":"現金","勘定科目（参考）":"旅費交通費","備考":"愛知県警察運転免許試験場","インボイス番号":null,"原紙PDF":"142109_07.pdf"},
-    {"日付":"2026/05/28","店舗・支払先":"不明（レストラン）","内容":"お食事代","金額（税込）":9820,"支払方法":"不明","勘定科目（参考）":"会議費","備考":null,"インボイス番号":null,"原紙PDF":"142109_08.pdf"},
-    {"日付":"2026/05/29","店舗・支払先":"S-LAND PARK 名駅2丁目第2","内容":"駐車料金","金額（税込）":200,"支払方法":"現金","勘定科目（参考）":"旅費交通費","備考":null,"インボイス番号":"T6180001101922","原紙PDF":"142109_09.pdf"},
-    {"日付":"2026/05/30","店舗・支払先":"ワークマン 桑名江場店","内容":"作業着・衣類（4点）","金額（税込）":8480,"支払方法":"クレジット（DCカード）","勘定科目（参考）":"福利厚生費","備考":null,"インボイス番号":"T6190001028181","原紙PDF":"142134_01.pdf"},
-    {"日付":"2026/05/31","店舗・支払先":"ベイシア 御前崎店","内容":"食料品・日用品（11点）","金額（税込）":2631,"支払方法":"クレジット（Mastercard）","勘定科目（参考）":"会議費","備考":null,"インボイス番号":"T3070001004866","原紙PDF":"142134_02.pdf"},
-    {"日付":"2026/05/31","店舗・支払先":"マックスバリュ浜岡店","内容":"食料品（20点）","金額（税込）":4805,"支払方法":"クレジット（Mastercard）","勘定科目（参考）":"会議費","備考":null,"インボイス番号":"T1080101006499","原紙PDF":"142134_03.pdf"},
-    {"日付":"2026/05/31","店舗・支払先":"マックスバリュ浜岡店","内容":"食料品・酒類（9点）","金額（税込）":1939,"支払方法":"クレジット（Mastercard）","勘定科目（参考）":"会議費","備考":"同日2件","インボイス番号":"T1080101006499","原紙PDF":"142134_04.pdf"},
-    {"日付":"2026/05/31","店舗・支払先":"ホームプラザナフコ浜岡店","内容":"サビ止めスプレー・プレート等","金額（税込）":4921,"支払方法":"不明","勘定科目（参考）":"消耗品費","備考":null,"インボイス番号":null,"原紙PDF":"142134_05.pdf"},
-    {"日付":"2026/06/01","店舗・支払先":"セブン-イレブン御前崎浜岡店","内容":"飲料・氷","金額（税込）":937,"支払方法":"クレジット（Mastercard）","勘定科目（参考）":"会議費","備考":null,"インボイス番号":"T1080401022007","原紙PDF":"142134_06.pdf"},
-    {"日付":"2026/06/01","店舗・支払先":"マックスバリュ浜岡店","内容":"食料品（8点）","金額（税込）":3240,"支払方法":"クレジット","勘定科目（参考）":"会議費","備考":null,"インボイス番号":"T1080101006499","原紙PDF":"142134_07.pdf"},
-    {"日付":"2026/06/01","店舗・支払先":"五味八珍FC浜岡店","内容":"お食事代","金額（税込）":3245,"支払方法":"不明","勘定科目（参考）":"会議費","備考":null,"インボイス番号":"T2080402018093","原紙PDF":"142134_08.pdf"},
-    {"日付":"2026/06/01","店舗・支払先":"㈲フルエ","内容":"収入印紙代金","金額（税込）":4000,"支払方法":"現金","勘定科目（参考）":"租税公課","備考":null,"インボイス番号":"T4130001011987","原紙PDF":"142134_09.pdf"},
-    {"日付":"2026/06/02","店舗・支払先":"ラーメン猫鋼 刈谷オアシス店","内容":"お食事代","金額（税込）":3040,"支払方法":"現金","勘定科目（参考）":"会議費","備考":null,"インボイス番号":"T4130001011987","原紙PDF":"142134_10.pdf"},
+    {"日付":"2026/06/01","店舗・支払先":"GENKY 愛石店","内容":"スーパードライム","金額（税込）":1628,"支払方法":"クレジット（JCB）","勘定科目（参考）":"会議費","備考":null,"インボイス番号":"T9210001007535","原紙PDF":"142109_01.pdf"},
+    {"日付":"2026/05/26","店舗・支払先":"五味八珍FC浜岡店","内容":"お食事代","金額（税込）":7205,"支払方法":"不明","勘定科目（参考）":"会議費","備考":null,"インボイス番号":"T2080402018093","原紙PDF":"142109_02.pdf"},
+    {"日付":"2026/05/26","店舗・支払先":"中華料理店 小雪","内容":"お食事代","金額（税込）":0,"支払方法":"不明","勘定科目（参考）":"会議費","備考":"金額不明","インボイス番号":null,"原紙PDF":"142109_03.pdf"},
+    {"日付":"2026/05/27","店舗・支払先":"地魚料理 一","内容":"お食事代","金額（税込）":10100,"支払方法":"不明","勘定科目（参考）":"会議費","備考":null,"インボイス番号":"T3080401015256","原紙PDF":"142109_04.pdf"},
+    {"日付":"2026/05/28","店舗・支払先":"PUNTOMINO","内容":"お食事代","金額（税込）":5900,"支払方法":"不明","勘定科目（参考）":"会議費","備考":null,"インボイス番号":null,"原紙PDF":"142109_05.pdf"},
+    {"日付":"2026/05/28","店舗・支払先":"S-LAND PARK 名駅2丁目第2","内容":"駐車料金","金額（税込）":500,"支払方法":"現金","勘定科目（参考）":"旅費交通費","備考":"愛知県警察運転免許試験場","インボイス番号":null,"原紙PDF":"142109_06.pdf"},
+    {"日付":"2026/05/28","店舗・支払先":"不明（レストラン）","内容":"お食事代","金額（税込）":9820,"支払方法":"不明","勘定科目（参考）":"会議費","備考":null,"インボイス番号":null,"原紙PDF":"142109_07.pdf"},
+    {"日付":"2026/05/29","店舗・支払先":"S-LAND PARK 名駅2丁目第2","内容":"駐車料金","金額（税込）":200,"支払方法":"現金","勘定科目（参考）":"旅費交通費","備考":null,"インボイス番号":"T6180001101922","原紙PDF":"142109_08.pdf"},
+    {"日付":"2026/05/30","店舗・支払先":"ワークマン 桑名江場店","内容":"作業着・衣類（4点）","金額（税込）":8480,"支払方法":"クレジット（DCカード）","勘定科目（参考）":"福利厚生費","備考":null,"インボイス番号":"T6190001028181","原紙PDF":"142109_09.pdf"},
+    {"日付":"2026/05/31","店舗・支払先":"ベイシア 御前崎店","内容":"食料品・日用品（11点）","金額（税込）":2631,"支払方法":"クレジット（Mastercard）","勘定科目（参考）":"会議費","備考":null,"インボイス番号":"T3070001004866","原紙PDF":"142109_10.pdf"},
+    {"日付":"2026/05/31","店舗・支払先":"マックスバリュ浜岡店","内容":"食料品（20点）","金額（税込）":4805,"支払方法":"クレジット（Mastercard）","勘定科目（参考）":"会議費","備考":null,"インボイス番号":"T1080101006499","原紙PDF":"142109_11.pdf"},
+    {"日付":"2026/05/31","店舗・支払先":"マックスバリュ浜岡店","内容":"食料品・酒類（9点）","金額（税込）":1939,"支払方法":"クレジット（Mastercard）","勘定科目（参考）":"会議費","備考":"同日2件","インボイス番号":"T1080101006499","原紙PDF":"142109_12.pdf"},
+    {"日付":"2026/05/31","店舗・支払先":"ホームプラザナフコ浜岡店","内容":"サビ止めスプレー・プレート等","金額（税込）":4921,"支払方法":"不明","勘定科目（参考）":"消耗品費","備考":null,"インボイス番号":null,"原紙PDF":"142109_13.pdf"},
+    {"日付":"2026/06/01","店舗・支払先":"セブン-イレブン御前崎浜岡店","内容":"飲料・氷","金額（税込）":937,"支払方法":"クレジット（Mastercard）","勘定科目（参考）":"会議費","備考":null,"インボイス番号":"T1080401022007","原紙PDF":"142109_14.pdf"},
+    {"日付":"2026/06/01","店舗・支払先":"マックスバリュ浜岡店","内容":"食料品（8点）","金額（税込）":3240,"支払方法":"クレジット","勘定科目（参考）":"会議費","備考":null,"インボイス番号":"T1080101006499","原紙PDF":"142109_15.pdf"},
+    {"日付":"2026/06/01","店舗・支払先":"五味八珍FC浜岡店","内容":"お食事代","金額（税込）":3245,"支払方法":"不明","勘定科目（参考）":"会議費","備考":null,"インボイス番号":"T2080402018093","原紙PDF":"142109_16.pdf"},
+    {"日付":"2026/06/01","店舗・支払先":"㈲フルエ","内容":"収入印紙代金","金額（税込）":4000,"支払方法":"現金","勘定科目（参考）":"租税公課","備考":null,"インボイス番号":"T4130001011987","原紙PDF":"142109_17.pdf"},
+    {"日付":"2026/06/02","店舗・支払先":"ラーメン猫鋼 刈谷オアシス店","内容":"お食事代","金額（税込）":3040,"支払方法":"現金","勘定科目（参考）":"会議費","備考":null,"インボイス番号":"T4130001011987","原紙PDF":"142109_18.pdf"},
   ];
   // 重複チェック（店舗名＋金額＋日付が一致するものはスキップ）
   let added = 0;
@@ -1273,6 +1283,213 @@ function downloadCSV(rows, filename) {
   a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8'}));
   a.download = filename; a.click();
 }
+
+// ===== CREDIT CARD =====
+let creditData = {}; // { 'YYYY-MM': [ {date, content, amount, ...} ] }
+
+function renderCreditPage() {
+  // ---- 1. ryoshuData からクレジット払い集計 ----
+  const creditKeywords = ['クレジット','JCB','AMEX','Mastercard','VISA','VISA','信販','カード'];
+  const byMonth = {};
+  (ryoshuData || []).forEach(r => {
+    if (!r['日付']) return;
+    const method = r['支払方法'] || '';
+    if (!creditKeywords.some(k => method.includes(k))) return;
+    const ym = r['日付'].slice(0,7).replace('/','-'); // "2026/06/01" -> "2026-06"
+    if (!byMonth[ym]) byMonth[ym] = {amount:0, count:0, rows:[]};
+    const amt = Number(r['金額（税込）']) || 0;
+    byMonth[ym].amount += amt;
+    byMonth[ym].count++;
+    byMonth[ym].rows.push(r);
+  });
+
+  const sortedMonths = Object.keys(byMonth).sort().reverse();
+  const totalCredit = sortedMonths.reduce((s,m)=>s+byMonth[m].amount,0);
+
+  document.getElementById('summary-credit').innerHTML = `
+    <div class="summary-card"><div class="sum-label">クレジット合計</div><div class="sum-amount">¥${totalCredit.toLocaleString()}</div></div>
+    <div class="summary-card"><div class="sum-label">対象件数</div><div class="sum-amount">${sortedMonths.reduce((s,m)=>s+byMonth[m].count,0)}件</div></div>
+  `;
+
+  // ---- 2. 月別カード ----
+  const CREDIT_BASE = 'https://furuenet-my.sharepoint.com/:f:/g/personal/yk_furuenet_onmicrosoft_com/IgCq7lbJcGq7SLb_amTzZOARAUb2OmL6LjZUdDVfV19jL_8?e=EUA3h5';
+
+  let html = `<div style="margin-bottom:8px;text-align:right">
+    <a href="${CREDIT_BASE}" target="_blank" style="font-size:12px;color:#185FA5;text-decoration:none">📁 OneDriveのクレジットカードフォルダを開く →</a>
+  </div>`;
+
+  if (sortedMonths.length === 0 && Object.keys(creditData).length === 0) {
+    html += `<div style="text-align:center;color:#aaa;padding:32px;font-size:14px">
+      クレジット払いの領収書データがありません<br>
+      <span style="font-size:12px">支払方法に「クレジット」が含まれる領収書が集計されます</span>
+    </div>`;
+  }
+
+  // ryoshuData由来の月別一覧
+  sortedMonths.forEach(ym => {
+    const m = byMonth[ym];
+    const [y,mo] = ym.split('-');
+    const label = `${y}年${mo}月`;
+    // 明細行
+    const rowsHtml = m.rows.map(r => {
+      const pdfFn = r['原紙PDF'] ? `<button onclick="event.stopPropagation();openReceiptPDF('${r['原紙PDF'].replace(/'/g,"\\'")}');" style="font-size:11px;padding:2px 7px;background:#E6F1FB;color:#185FA5;border:none;border-radius:5px;cursor:pointer">📄</button>` : '';
+      return `<tr style="border-bottom:1px solid #f0eeea">
+        <td style="padding:5px 4px;font-size:12px;color:#52514e">${r['日付']||''}</td>
+        <td style="padding:5px 4px;font-size:12px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r['店舗・支払先']||r['件名']||''}</td>
+        <td style="padding:5px 4px;font-size:12px;text-align:right;color:#185FA5;font-weight:600">¥${(Number(r['金額（税込）'])||0).toLocaleString()}</td>
+        <td style="padding:5px 4px;font-size:12px;text-align:center">${pdfFn}</td>
+      </tr>`;
+    }).join('');
+
+    // CSV取り込み済みデータ
+    const csvRows = (creditData[ym] || []).map(c => `<tr style="border-bottom:1px solid #f0eeea;background:#FFFDE7">
+      <td style="padding:5px 4px;font-size:12px;color:#52514e">${c.date||''}</td>
+      <td style="padding:5px 4px;font-size:12px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.content||''}</td>
+      <td style="padding:5px 4px;font-size:12px;text-align:right;color:#333;font-weight:600">¥${(Number(c.amount)||0).toLocaleString()}</td>
+      <td style="padding:5px 4px;font-size:12px;text-align:center;color:#888">明細</td>
+    </tr>`).join('');
+
+    const csvTotal = (creditData[ym]||[]).reduce((s,c)=>s+(Number(c.amount)||0),0);
+
+    html += `<div class="form-card" style="padding:0;margin-bottom:10px;overflow:hidden">
+      <div style="background:#E6F1FB;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleCreditMonth('${ym}')">
+        <span style="font-weight:600;font-size:14px;color:#185FA5">📅 ${label}</span>
+        <div style="text-align:right">
+          <span style="font-size:13px;color:#185FA5;font-weight:700">領収書 ¥${m.amount.toLocaleString()}</span>
+          ${csvTotal ? `<span style="font-size:12px;color:#888;margin-left:8px">/ 明細 ¥${csvTotal.toLocaleString()}</span>` : ''}
+          <span style="font-size:12px;color:#52514e;margin-left:8px">${m.count}件</span>
+        </div>
+      </div>
+      <div id="credit-month-${ym}" style="display:none">
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr style="background:#f5f4f2">
+            <th style="padding:5px 4px;font-size:11px;text-align:left;color:#898781;font-weight:500">日付</th>
+            <th style="padding:5px 4px;font-size:11px;text-align:left;color:#898781;font-weight:500">内容</th>
+            <th style="padding:5px 4px;font-size:11px;text-align:right;color:#898781;font-weight:500">金額</th>
+            <th style="padding:5px 4px;font-size:11px;text-align:center;color:#898781;font-weight:500">原紙</th>
+          </tr></thead>
+          <tbody>${rowsHtml}${csvRows}</tbody>
+        </table>
+      </div>
+    </div>`;
+  });
+
+  // CSV取り込み済みで領収書データにない月
+  Object.keys(creditData).filter(ym=>!byMonth[ym]).sort().reverse().forEach(ym => {
+    const rows = creditData[ym];
+    const [y,mo] = ym.split('-');
+    const label = `${y}年${mo}月`;
+    const total = rows.reduce((s,c)=>s+(Number(c.amount)||0),0);
+    const rowsHtml = rows.map(c=>`<tr style="border-bottom:1px solid #f0eeea;background:#FFFDE7">
+      <td style="padding:5px 4px;font-size:12px;color:#52514e">${c.date||''}</td>
+      <td style="padding:5px 4px;font-size:12px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.content||''}</td>
+      <td style="padding:5px 4px;font-size:12px;text-align:right;color:#333;font-weight:600">¥${(Number(c.amount)||0).toLocaleString()}</td>
+      <td style="padding:5px 4px;font-size:12px;text-align:center;color:#888">明細</td>
+    </tr>`).join('');
+    html += `<div class="form-card" style="padding:0;margin-bottom:10px;overflow:hidden">
+      <div style="background:#FFFDE7;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleCreditMonth('${ym}')">
+        <span style="font-weight:600;font-size:14px;color:#7c6e00">📅 ${label}（明細のみ）</span>
+        <span style="font-size:13px;color:#333;font-weight:700">¥${total.toLocaleString()} / ${rows.length}件</span>
+      </div>
+      <div id="credit-month-${ym}" style="display:none">
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr style="background:#f5f4f2">
+            <th style="padding:5px 4px;font-size:11px;text-align:left;color:#898781;font-weight:500">日付</th>
+            <th style="padding:5px 4px;font-size:11px;text-align:left;color:#898781;font-weight:500">内容</th>
+            <th style="padding:5px 4px;font-size:11px;text-align:right;color:#898781;font-weight:500">金額</th>
+            <th style="padding:5px 4px;font-size:11px"></th>
+          </tr></thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      </div>
+    </div>`;
+  });
+
+  document.getElementById('credit-monthly-list').innerHTML = html;
+}
+
+function toggleCreditMonth(ym) {
+  const el = document.getElementById('credit-month-' + ym);
+  if (!el) return;
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+function importCreditCSV(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const targetMonth = document.getElementById('credit-import-month').value; // "YYYY-MM"
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const text = e.target.result;
+    // Detect encoding: try to detect Shift-JIS by decoding
+    const lines = text.split(/\r?\n/).filter(l=>l.trim());
+    if (lines.length < 2) { showToast('❌ データが見つかりません'); return; }
+
+    // Parse CSV - find header
+    const parseCSVLine = l => {
+      const res = []; let cur = ''; let inQ = false;
+      for (let i=0;i<l.length;i++) {
+        const c = l[i];
+        if (c==='"') { inQ=!inQ; }
+        else if (c===',' && !inQ) { res.push(cur.trim()); cur=''; }
+        else cur+=c;
+      }
+      res.push(cur.trim());
+      return res;
+    };
+
+    const headers = parseCSVLine(lines[0]).map(h=>h.replace(/^\uFEFF/,''));
+    // Detect columns: ご利用日, ご利用内容, 金額 etc.
+    const dateIdx = headers.findIndex(h=>h.includes('ご利用日')||h.includes('利用日')||h.includes('日付'));
+    const contentIdx = headers.findIndex(h=>h.includes('ご利用内容')||h.includes('内容')||h.includes('摘要')||h.includes('加盟店'));
+    const amtIdx = headers.findIndex(h=>h.includes('金額')||h.includes('お支払い金額')||h.includes('利用金額'));
+
+    if (dateIdx<0 || amtIdx<0) {
+      showToast('❌ 列が認識できません（ご利用日・金額が必要）');
+      console.log('Headers:', headers);
+      return;
+    }
+
+    const rows = [];
+    for (let i=1;i<lines.length;i++) {
+      const cols = parseCSVLine(lines[i]);
+      if (!cols[dateIdx] || !cols[amtIdx]) continue;
+      const rawAmt = (cols[amtIdx]||'').replace(/[,，￥¥\s]/g,'');
+      const amount = parseFloat(rawAmt);
+      if (isNaN(amount)) continue;
+      const date = cols[dateIdx].trim();
+      const ym = date.length>=7 ? date.slice(0,7).replace('/','-') : (targetMonth||'');
+      const content = contentIdx>=0 ? cols[contentIdx].trim() : '';
+      rows.push({date, content, amount, ym});
+    }
+
+    if (rows.length===0) { showToast('❌ 取り込めるデータがありません'); return; }
+
+    // Group by month
+    const grouped = {};
+    rows.forEach(r => {
+      const k = r.ym || targetMonth;
+      if (!k) return;
+      if (!grouped[k]) grouped[k]=[];
+      grouped[k].push({date:r.date, content:r.content, amount:r.amount});
+    });
+
+    // Merge into creditData
+    Object.entries(grouped).forEach(([k,v]) => { creditData[k]=v; });
+
+    // Save to Firebase
+    try { db.ref('furue/credit').set(creditData); } catch(e) {}
+    try { localStorage.setItem('furue_credit', JSON.stringify(creditData)); } catch {}
+
+    const totalRows = rows.length;
+    showToast(`✅ ${totalRows}件のクレジット明細を取り込みました`);
+    renderCreditPage();
+  };
+
+  // Try reading as UTF-8 first; if garbled we'll need Shift-JIS approach
+  reader.readAsText(file, 'Shift_JIS');
+  input.value = '';
+}
 </script>
 
 <div id="page-kyuyo" class="page">
@@ -1342,6 +1559,29 @@ function downloadCSV(rows, filename) {
       <button onclick="saveEmployee()" style="flex:1;padding:10px;background:#185FA5;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer;font-weight:500">保存</button>
       <button onclick="document.getElementById('employee-modal').style.display='none'" style="flex:1;padding:10px;background:#f5f4f2;color:#52514e;border:none;border-radius:8px;font-size:14px;cursor:pointer">キャンセル</button>
     </div>
+  </div>
+</div>
+
+<!-- クレジットカード -->
+<div id="page-credit" class="page">
+  <div class="summary" id="summary-credit"></div>
+  <div class="section-hdr">クレジットカード 月別集計</div>
+
+  <!-- 月別サマリー -->
+  <div id="credit-monthly-list"></div>
+
+  <!-- クレジット明細インポート -->
+  <div class="form-card" style="padding:12px;margin-top:16px">
+    <div style="font-size:13px;font-weight:600;color:#52514e;margin-bottom:8px">📂 クレジット請求書CSVを取り込む</div>
+    <div style="font-size:12px;color:#898781;margin-bottom:8px">OneDriveの <a href="https://furuenet-my.sharepoint.com/personal/yk_furuenet_onmicrosoft_com/Documents/(有)フルエ/(有)フルエ総務/クレジットカード/クレジット請求表2025.xlsx" target="_blank" style="color:#185FA5">クレジット請求表.xlsx</a> をCSV形式で保存してから選択してください</div>
+    <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
+      <label style="font-size:12px;white-space:nowrap">対象月：</label>
+      <input type="month" id="credit-import-month" style="border:1px solid #ccc;border-radius:6px;padding:4px 8px;font-size:13px;flex:1">
+    </div>
+    <label style="display:block;padding:11px;background:#E6F1FB;color:#185FA5;border-radius:10px;text-align:center;font-size:14px;font-weight:500;cursor:pointer">
+      📄 CSVファイルを選択して取り込む
+      <input type="file" accept=".csv" style="display:none" onchange="importCreditCSV(this)">
+    </label>
   </div>
 </div>
 

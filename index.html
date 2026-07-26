@@ -483,7 +483,7 @@ function showDetail(type, idx) {
   document.getElementById('modal-title').textContent = r[nameKey]||'詳細';
   const fields = type==='ryoshu'
     ? [['日付',r['日付']],['内容',r['内容']],['金額（税込）',fmt(r['金額（税込）'])],['支払方法',r['支払方法']],['勘定科目',r['勘定科目（参考）']],['備考',r['備考']],['インボイス番号',r['インボイス番号']||'未入力']]
-    : [['日付',r['日付']],['件名',r['件名']],['金額（税込）',fmt(r['金額（税込）'])],['支払方法',r['支払方法']],['勘定科目',r['勘定科目（参考）']],['備考',r['備考']],['原紙PDF',r['原紙PDF']||'なし']];
+    : [['日付',r['日付']],['件名',r['件名']],['金額（税込）',fmt(r['金額（税込）'])],['支払方法',r['支払方法']],['勘定科目',r['勘定科目（参考）']],['備考',r['備考']],['インボイス番号',r['インボイス番号']||'なし'],['原紙PDF',r['原紙PDF']||'なし']];
   const photoBtn = (type==='ryoshu' && r['photo'])
     ? `<button onclick="showPhoto('${type}',${idx})" style="width:100%;padding:11px;background:#E6F1FB;color:#185FA5;border:none;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer;margin-bottom:10px;">📷 原紙を見る（写真）</button>`
     : '';
@@ -567,10 +567,11 @@ function openReceiptPDF(filename) {
 async function migrateData() {
   if (!confirm('FirebaseのデータにインボイスT番号と原紙PDFリンクを追加します。よろしいですか？')) return;
   try {
-    const snap = await db.ref('kaikei').once('value');
+    // furue パスから現在のデータを読み込む
+    const snap = await db.ref('furue').once('value');
     const val = snap.val() || {};
-    const existRyoshu = restoreFromFb(val.ryoshu || RYOSHU_INIT.map(r=>({...r})));
-    const existShiire = restoreFromFb(val.shiire || SHIIRE_INIT.map(r=>({...r})));
+    const existRyoshu = val.ryoshu ? restoreFromFb(val.ryoshu).filter(Boolean) : RYOSHU_INIT.map(r=>({...r}));
+    const existShiire = val.shiire ? restoreFromFb(val.shiire).filter(Boolean) : SHIIRE_INIT.map(r=>({...r}));
 
     // Merge T-numbers into ryoshu from RYOSHU_INIT
     const updatedRyoshu = existRyoshu.map(r => {
@@ -582,22 +583,24 @@ async function migrateData() {
       return r;
     });
 
-    // Merge 原紙PDF into shiire from SHIIRE_INIT
+    // Merge インボイス番号 and 原紙PDF into shiire from SHIIRE_INIT
     const updatedShiire = existShiire.map(r => {
       if (!r['No.'] || typeof r['No.'] !== 'number') return r;
       const init = SHIIRE_INIT.find(x => x['No.'] === r['No.']);
-      if (init && init['原紙PDF'] && !r['原紙PDF']) {
-        return {...r, '原紙PDF': init['原紙PDF']};
-      }
-      return r;
+      if (!init) return r;
+      return {
+        ...r,
+        '原紙PDF': r['原紙PDF'] || init['原紙PDF'] || null,
+        'インボイス番号': r['インボイス番号'] || init['インボイス番号'] || null,
+      };
     });
 
-    await db.ref('kaikei').set(sanitizeForFb({ryoshu: updatedRyoshu, shiire: updatedShiire}));
     ryoshuData = updatedRyoshu;
     shiireData = updatedShiire;
     saveData('ryoshu', ryoshuData);
     saveData('shiire', shiireData);
     renderList('ryoshu');
+    renderList('shiire');
     showToast('✅ T番号・原紙PDFリンクをFirebaseに適用しました');
   } catch(e) {
     showToast('❌ エラー: ' + e.message);

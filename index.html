@@ -1045,12 +1045,51 @@ function populateKinmuEmpSelect() {
   employeeData.forEach(e => sel.innerHTML += `<option value="${e.id}">${e.name}</option>`);
 }
 
+async function importKinmuCSV(input) {
+  const month = document.getElementById('csv-import-month').value;
+  if (!month) { showToast('対象月を先に選択してください'); input.value=''; return; }
+  const file = input.files[0];
+  if (!file) return;
+  const text = await file.text();
+  const lines = text.trim().split('\n');
+  if (lines.length < 2) { showToast('CSVが空です'); input.value=''; return; }
+  const headers = lines[0].split(',').map(h => h.replace(/"/g,'').trim());
+  const ci = k => headers.indexOf(k);
+  const parseHM = s => { s=(s||'').replace(/"/g,'').trim(); const p=s.split(':').map(Number); return p.length===2?+(p[0]+p[1]/60).toFixed(2):0; };
+  const imported = [];
+  for (let i=1;i<lines.length;i++) {
+    const cols = lines[i].split(',').map(c=>c.replace(/"/g,'').trim());
+    if (cols.length < 3 || !cols[ci('姓 名')]) continue;
+    const code = cols[ci('スタッフコード')] || '';
+    const name = cols[ci('姓 名')] || '';
+    const days = Number(cols[ci('実働日数')])||0;
+    const totalHrs = parseHM(cols[ci('実労働時間')]);
+    const ot = parseHM(cols[ci('実残業時間')]);
+    const emp = employeeData.find(e=>e.name===name) || employeeData.find(e=>e.id==='emp_'+code);
+    const empId = emp ? emp.id : 'emp_'+code;
+    imported.push({empId, name, days, totalHrs, ot});
+  }
+  if (!imported.length) { showToast('データが読み込めませんでした'); input.value=''; return; }
+  if (!kyuyoData[month]) kyuyoData[month] = [];
+  imported.forEach(imp => {
+    const ex = kyuyoData[month].find(r=>r.empId===imp.empId);
+    if (ex) { ex.days=imp.days; ex.totalHrs=imp.totalHrs; ex.ot=imp.ot; }
+    else kyuyoData[month].push(imp);
+  });
+  try { await db.ref('furue/kyuyo/'+month).set(sanitizeForFb(kyuyoData[month])); } catch(e) {}
+  localStorage.setItem('furue_kyuyo_'+month, JSON.stringify(kyuyoData[month]));
+  document.getElementById('kyuyo-month').value = month;
+  renderKinmuTable();
+  showToast('✅ '+month+' を取り込みました（'+imported.length+'件）');
+  input.value='';
+}
+
 function renderKinmuTable() {
   const m = getKyuyoMonth();
   const records = (kinmuData[m] || []).sort((a,b)=>a.date<b.date?-1:1);
   const wrap = document.getElementById('kinmu-table-wrap');
-  // Show monthly summary from KYUYO_INIT if daily records are empty
-  const initRecs = KYUYO_INIT[m] || [];
+  // Show monthly summary from kyuyoData or KYUYO_INIT if daily records are empty
+  const initRecs = kyuyoData[m]?.length ? kyuyoData[m] : (KYUYO_INIT[m] || []);
   if (records.length === 0 && initRecs.length > 0) {
     const fmtH = n => n ? Number(n).toFixed(1) + 'h' : '—';
     let html = '<div style="font-size:11px;color:#898781;margin-bottom:6px">※AI給料表より（月間集計）</div>';
@@ -1200,6 +1239,19 @@ function downloadCSV(rows, filename) {
 
   <!-- 勤務表 -->
   <div id="kinmu-section" style="display:none">
+    <!-- CSV取り込み -->
+    <div class="form-card" style="padding:12px;margin-bottom:10px">
+      <div style="font-size:13px;font-weight:600;color:#52514e;margin-bottom:8px">📂 勤務表CSV取り込み（ジョブカン等）</div>
+      <div style="font-size:12px;color:#898781;margin-bottom:8px">OneDriveからCSVをダウンロードして選択してください</div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px">
+        <label style="font-size:12px;white-space:nowrap">対象月：</label>
+        <input type="month" id="csv-import-month" style="border:1px solid #ccc;border-radius:6px;padding:4px 8px;font-size:13px;flex:1">
+      </div>
+      <label style="display:block;padding:11px;background:#E6F1FB;color:#185FA5;border-radius:10px;text-align:center;font-size:14px;font-weight:500;cursor:pointer">
+        📄 CSVファイルを選択して取り込む
+        <input type="file" accept=".csv" style="display:none" onchange="importKinmuCSV(this)">
+      </label>
+    </div>
     <div class="form-card" style="padding:12px;margin-bottom:10px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
         <div style="font-size:13px;font-weight:600;color:#52514e">勤務表</div>

@@ -463,7 +463,8 @@ function renderList(type) {
     const sub = type==='ryoshu' ? r['内容'] : r['件名'];
     const inv = r['インボイス番号'];
     const badge = inv ? `<span class="badge ok">✓ インボイス</span>` : `<span class="badge">インボイス未入力</span>`;
-    const pdfBtn = r['原紙PDF'] ? `<button onclick="event.stopPropagation();openInvoicePDF('${r['原紙PDF'].replace(/'/g,"\\'")}');" style="padding:3px 8px;background:#E6F1FB;color:#185FA5;border:none;border-radius:6px;font-size:12px;cursor:pointer;margin-left:6px;">📄 原紙</button>` : '';
+    const pdfFn = type==='ryoshu' ? 'openReceiptPDF' : 'openInvoicePDF';
+    const pdfBtn = r['原紙PDF'] ? `<button onclick="event.stopPropagation();${pdfFn}('${r['原紙PDF'].replace(/'/g,"\\'")}');" style="padding:3px 8px;background:#E6F1FB;color:#185FA5;border:none;border-radius:6px;font-size:12px;cursor:pointer;margin-left:6px;">📄 原紙</button>` : '';
     return `<div class="entry" onclick="showDetail('${type}',${data.indexOf(r)})">
       <div class="entry-top"><span class="entry-name">${name||''}</span><span class="entry-amount">${fmt(r['金額（税込）'])}</span></div>
       <div class="entry-sub">${r['日付']||''} · ${r['支払方法']||''} · ${sub||''} ${badge}${pdfBtn}</div>
@@ -485,7 +486,9 @@ function showDetail(type, idx) {
     ? `<button onclick="showPhoto('${type}',${idx})" style="width:100%;padding:11px;background:#E6F1FB;color:#185FA5;border:none;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer;margin-bottom:10px;">📷 原紙を見る（写真）</button>`
     : '';
   const pdfViewBtn = r['原紙PDF']
-    ? `<button onclick="openInvoicePDF('${r['原紙PDF'].replace(/'/g,"\\'")}');" style="width:100%;padding:11px;background:#E6F1FB;color:#185FA5;border:none;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer;margin-bottom:10px;">📄 請求書原紙を開く（OneDrive）</button>`
+    ? (type==='ryoshu'
+        ? `<button onclick="openReceiptPDF('${r['原紙PDF'].replace(/'/g,"\\'")}');" style="width:100%;padding:11px;background:#E6F1FB;color:#185FA5;border:none;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer;margin-bottom:10px;">📄 領収書原紙を開く（OneDrive）</button>`
+        : `<button onclick="openInvoicePDF('${r['原紙PDF'].replace(/'/g,"\\'")}');" style="width:100%;padding:11px;background:#E6F1FB;color:#185FA5;border:none;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer;margin-bottom:10px;">📄 請求書原紙を開く（OneDrive）</button>`)
     : '';
   const invoiceSection = type==='ryoshu'
     ? `<div style="margin-top:12px;font-size:13px;font-weight:500;color:#52514e;">インボイス番号を入力</div>
@@ -493,9 +496,10 @@ function showDetail(type, idx) {
      <input type="text" id="inv-input" placeholder="T1234567890123" value="${r['インボイス番号']||''}">
      <button onclick="saveInvoice('${type}',${idx})">保存</button>
    </div>` : '';
+  const pdfPlaceholder = type==='ryoshu' ? '例: 142624_01.pdf' : '例: ○○請求書2607.pdf';
   const pdfInputSection = `<div style="margin-top:12px;font-size:13px;font-weight:500;color:#52514e;">原紙PDFファイル名（OneDrive）</div>
    <div class="invoice-field">
-     <input type="text" id="pdf-input" placeholder="例: ○○請求書2607.pdf" value="${r['原紙PDF']||''}">
+     <input type="text" id="pdf-input" placeholder="${pdfPlaceholder}" value="${r['原紙PDF']||''}">
      <button onclick="savePDFLink('${type}',${idx})">保存</button>
    </div>`;
   document.getElementById('modal-body').innerHTML = photoBtn + pdfViewBtn + fields.map(([k,v])=>
@@ -543,9 +547,18 @@ function closeModal(e) {
 const ONEDRIVE_BASE = 'https://furuenet-my.sharepoint.com/personal/yk_furuenet_onmicrosoft_com/Documents/' +
   encodeURIComponent('(有)フルエ') + '/' + encodeURIComponent('SHRAPスキャナー') + '/';
 
+const RYOSHU_PDF_BASE = 'https://furuenet-my.sharepoint.com/personal/yk_furuenet_onmicrosoft_com/Documents/' +
+  encodeURIComponent('(有)フルエ') + '/' + encodeURIComponent('(有)フルエ総務') + '/' +
+  encodeURIComponent('領収書') + '/split/';
+
 function openInvoicePDF(filename) {
   if (!filename) return;
   window.open(ONEDRIVE_BASE + encodeURIComponent(filename), '_blank');
+}
+
+function openReceiptPDF(filename) {
+  if (!filename) return;
+  window.open(RYOSHU_PDF_BASE + encodeURIComponent(filename), '_blank');
 }
 
 // ===== FIREBASE MIGRATION (T番号・原紙PDFを既存データに適用) =====

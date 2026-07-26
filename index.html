@@ -109,6 +109,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;ba
   <button class="tab" onclick="showPage('nyuryoku')">新規入力</button>
   <button class="tab" onclick="showPage('dashboard')">集計</button>
   <button class="tab" onclick="showPage('export')">書き出し</button>
+  <button class="tab" onclick="showPage('kyuyo')">給与・勤務</button>
 </div>
 
 <!-- 領収書 -->
@@ -384,11 +385,12 @@ function showPage(name) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.getElementById('page-'+name).classList.add('active');
-  const idx = {'ryoshu':0,'shiire':1,'nyuryoku':2,'dashboard':3,'export':4}[name];
+  const idx = {'ryoshu':0,'shiire':1,'nyuryoku':2,'dashboard':3,'export':4,'kyuyo':5}[name];
   document.querySelectorAll('.tab')[idx].classList.add('active');
   if (name === 'ryoshu') renderList('ryoshu');
   if (name === 'shiire') renderList('shiire');
   if (name === 'dashboard') renderDashboard();
+  if (name === 'kyuyo') initKyuyoPage();
 }
 
 // ===== DASHBOARD =====
@@ -833,6 +835,356 @@ function showToast(msg) {
   document.body.appendChild(loadingEl);
   loadAllData().then(() => { loadingEl.remove(); renderList('ryoshu'); });
 })();
+
+// ===== 給与・勤務表 =====
+let employeeData = [];
+let kyuyoData = {}; // {YYYY-MM: [{empId, name, basePay, overtimePay, allowance, healthIns, pensionIns, employmentIns, incomeTax, net}]}
+let kinmuData = {};  // {YYYY-MM: [{date, empId, empName, start, end, breakMin, workHours, note}]}
+
+function getKyuyoMonth() {
+  const el = document.getElementById('kyuyo-month');
+  if (!el.value) {
+    const now = new Date();
+    el.value = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+  }
+  return el.value;
+}
+
+function showKyuyoTab(tab) {
+  document.getElementById('kyuyo-section').style.display = tab==='kyuyo' ? '' : 'none';
+  document.getElementById('kinmu-section').style.display = tab==='kinmu' ? '' : 'none';
+  document.getElementById('btn-kyuyo-tab').style.background = tab==='kyuyo' ? '#185FA5' : '#fff';
+  document.getElementById('btn-kyuyo-tab').style.color = tab==='kyuyo' ? '#fff' : '#185FA5';
+  document.getElementById('btn-kyuyo-tab').style.border = tab==='kyuyo' ? 'none' : '1.5px solid #185FA5';
+  document.getElementById('btn-kinmu-tab').style.background = tab==='kinmu' ? '#185FA5' : '#fff';
+  document.getElementById('btn-kinmu-tab').style.color = tab==='kinmu' ? '#fff' : '#185FA5';
+  document.getElementById('btn-kinmu-tab').style.border = tab==='kinmu' ? 'none' : '1.5px solid #185FA5';
+  if (tab==='kyuyo') renderKyuyoTable();
+  if (tab==='kinmu') { populateKinmuEmpSelect(); renderKinmuTable(); }
+}
+
+async function initKyuyoPage() {
+  const m = getKyuyoMonth();
+  try {
+    const snap = await db.ref('furue/employees').once('value');
+    employeeData = restoreFromFb(snap.val() || []).filter(Boolean);
+    const ks = await db.ref('furue/kyuyo/' + m).once('value');
+    kyuyoData[m] = restoreFromFb(ks.val() || []).filter(Boolean);
+    const km = await db.ref('furue/kinmu/' + m).once('value');
+    kinmuData[m] = restoreFromFb(km.val() || []).filter(Boolean);
+  } catch(e) {
+    employeeData = JSON.parse(localStorage.getItem('furue_employees') || '[]');
+    kyuyoData[m] = JSON.parse(localStorage.getItem('furue_kyuyo_'+m) || '[]');
+    kinmuData[m] = JSON.parse(localStorage.getItem('furue_kinmu_'+m) || '[]');
+  }
+  renderKyuyoTable();
+}
+
+async function loadKyuyo() { await initKyuyoPage(); }
+
+function renderKyuyoTable() {
+  const m = getKyuyoMonth();
+  const records = kyuyoData[m] || [];
+  const wrap = document.getElementById('kyuyo-table-wrap');
+  if (employeeData.length === 0) {
+    wrap.innerHTML = '<div style="color:#898781;font-size:13px;text-align:center;padding:20px">社員を追加してください</div>';
+    return;
+  }
+  const fmtY = n => n ? Number(n).toLocaleString() + '円' : '—';
+  let html = '<table style="width:100%;border-collapse:collapse;font-size:12px"><tr style="background:#f5f4f2">' +
+    '<th style="padding:6px;text-align:left;white-space:nowrap">氏名</th>' +
+    '<th style="padding:6px;text-align:right;white-space:nowrap">基本給</th>' +
+    '<th style="padding:6px;text-align:right;white-space:nowrap">時間外</th>' +
+    '<th style="padding:6px;text-align:right;white-space:nowrap">手当</th>' +
+    '<th style="padding:6px;text-align:right;white-space:nowrap">社保等控除</th>' +
+    '<th style="padding:6px;text-align:right;white-space:nowrap">所得税</th>' +
+    '<th style="padding:6px;text-align:right;white-space:nowrap">差引支給額</th>' +
+    '<th style="padding:6px"></th></tr>';
+  employeeData.forEach((emp, i) => {
+    const rec = records.find(r => r.empId === emp.id) || {};
+    html += `<tr style="border-bottom:1px solid #eee">
+      <td style="padding:6px">${emp.name}<br><span style="font-size:10px;color:#898781">${emp.type||''}</span></td>
+      <td style="padding:6px;text-align:right">${fmtY(rec.basePay !== undefined ? rec.basePay : emp.baseSalary)}</td>
+      <td style="padding:6px;text-align:right">${fmtY(rec.overtimePay)}</td>
+      <td style="padding:6px;text-align:right">${fmtY(rec.allowance)}</td>
+      <td style="padding:6px;text-align:right">${fmtY(rec.socialIns)}</td>
+      <td style="padding:6px;text-align:right">${fmtY(rec.incomeTax)}</td>
+      <td style="padding:6px;text-align:right;font-weight:600">${fmtY(rec.net)}</td>
+      <td style="padding:6px"><button onclick="openEditKyuyo(${i})" style="padding:3px 8px;background:#E6F1FB;color:#185FA5;border:none;border-radius:5px;font-size:11px;cursor:pointer">編集</button></td>
+    </tr>`;
+  });
+  html += '</table>';
+  wrap.innerHTML = html;
+}
+
+function openAddEmployee() {
+  document.getElementById('emp-modal-title').textContent = '社員追加';
+  document.getElementById('emp-edit-id').value = '';
+  document.getElementById('emp-name').value = '';
+  document.getElementById('emp-type').value = '正社員';
+  document.getElementById('emp-base').value = '';
+  document.getElementById('employee-modal').style.display = 'flex';
+}
+
+function openEditEmployee(id) {
+  const emp = employeeData.find(e => e.id === id);
+  if (!emp) return;
+  document.getElementById('emp-modal-title').textContent = '社員編集';
+  document.getElementById('emp-edit-id').value = emp.id;
+  document.getElementById('emp-name').value = emp.name;
+  document.getElementById('emp-type').value = emp.type || '正社員';
+  document.getElementById('emp-base').value = emp.baseSalary || '';
+  document.getElementById('employee-modal').style.display = 'flex';
+}
+
+async function saveEmployee() {
+  const editId = document.getElementById('emp-edit-id').value;
+  const name = document.getElementById('emp-name').value.trim();
+  const type = document.getElementById('emp-type').value;
+  const baseSalary = Number(document.getElementById('emp-base').value) || 0;
+  if (!name) { showToast('氏名を入力してください'); return; }
+  if (editId) {
+    const idx = employeeData.findIndex(e => e.id === editId);
+    if (idx >= 0) employeeData[idx] = {...employeeData[idx], name, type, baseSalary};
+  } else {
+    const id = 'emp_' + Date.now();
+    employeeData.push({id, name, type, baseSalary});
+  }
+  try { await db.ref('furue/employees').set(sanitizeForFb(employeeData)); } catch(e) {}
+  localStorage.setItem('furue_employees', JSON.stringify(employeeData));
+  document.getElementById('employee-modal').style.display = 'none';
+  renderKyuyoTable();
+  showToast('社員情報を保存しました');
+}
+
+function openEditKyuyo(empIdx) {
+  const m = getKyuyoMonth();
+  const emp = employeeData[empIdx];
+  const records = kyuyoData[m] || [];
+  const rec = records.find(r => r.empId === emp.id) || {empId: emp.id, basePay: emp.baseSalary};
+  const html = `<div style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1001;padding:20px;display:flex;align-items:center" id="kyuyo-edit-modal">
+    <div style="background:#fff;border-radius:14px;padding:20px;max-width:400px;width:100%;margin:auto">
+      <div style="font-size:16px;font-weight:600;margin-bottom:14px">${emp.name} 給与入力（${m}）</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div><label style="font-size:12px;color:#52514e">基本給</label><input type="number" id="ke-base" value="${rec.basePay||emp.baseSalary||''}" style="width:100%;border:1px solid #ccc;border-radius:6px;padding:6px;font-size:13px;box-sizing:border-box;margin-top:3px"></div>
+        <div><label style="font-size:12px;color:#52514e">時間外手当</label><input type="number" id="ke-ot" value="${rec.overtimePay||''}" style="width:100%;border:1px solid #ccc;border-radius:6px;padding:6px;font-size:13px;box-sizing:border-box;margin-top:3px"></div>
+        <div><label style="font-size:12px;color:#52514e">各種手当</label><input type="number" id="ke-al" value="${rec.allowance||''}" style="width:100%;border:1px solid #ccc;border-radius:6px;padding:6px;font-size:13px;box-sizing:border-box;margin-top:3px"></div>
+        <div><label style="font-size:12px;color:#52514e">社保等控除</label><input type="number" id="ke-si" value="${rec.socialIns||''}" style="width:100%;border:1px solid #ccc;border-radius:6px;padding:6px;font-size:13px;box-sizing:border-box;margin-top:3px"></div>
+        <div><label style="font-size:12px;color:#52514e">所得税</label><input type="number" id="ke-it" value="${rec.incomeTax||''}" style="width:100%;border:1px solid #ccc;border-radius:6px;padding:6px;font-size:13px;box-sizing:border-box;margin-top:3px"></div>
+        <div><label style="font-size:12px;color:#52514e">差引支給額</label><input type="number" id="ke-net" value="${rec.net||''}" style="width:100%;border:1px solid #ccc;border-radius:6px;padding:6px;font-size:13px;box-sizing:border-box;margin-top:3px"></div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:14px">
+        <button onclick="saveKyuyoRecord('${emp.id}','${m}')" style="flex:1;padding:10px;background:#185FA5;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer;font-weight:500">保存</button>
+        <button onclick="document.getElementById('kyuyo-edit-modal').remove()" style="flex:1;padding:10px;background:#f5f4f2;color:#52514e;border:none;border-radius:8px;font-size:14px;cursor:pointer">キャンセル</button>
+      </div>
+    </div>
+  </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+async function saveKyuyoRecord(empId, m) {
+  const base = Number(document.getElementById('ke-base').value)||0;
+  const ot = Number(document.getElementById('ke-ot').value)||0;
+  const al = Number(document.getElementById('ke-al').value)||0;
+  const si = Number(document.getElementById('ke-si').value)||0;
+  const it = Number(document.getElementById('ke-it').value)||0;
+  const net = Number(document.getElementById('ke-net').value)||(base+ot+al-si-it);
+  if (!kyuyoData[m]) kyuyoData[m] = [];
+  const idx = kyuyoData[m].findIndex(r => r.empId === empId);
+  const rec = {empId, basePay:base, overtimePay:ot, allowance:al, socialIns:si, incomeTax:it, net};
+  if (idx >= 0) kyuyoData[m][idx] = rec; else kyuyoData[m].push(rec);
+  try { await db.ref('furue/kyuyo/'+m).set(sanitizeForFb(kyuyoData[m])); } catch(e) {}
+  localStorage.setItem('furue_kyuyo_'+m, JSON.stringify(kyuyoData[m]));
+  document.getElementById('kyuyo-edit-modal').remove();
+  renderKyuyoTable();
+  showToast('給与を保存しました');
+}
+
+function populateKinmuEmpSelect() {
+  const sel = document.getElementById('kinmu-emp');
+  sel.innerHTML = '<option value="">選択してください</option>';
+  employeeData.forEach(e => sel.innerHTML += `<option value="${e.id}">${e.name}</option>`);
+}
+
+function renderKinmuTable() {
+  const m = getKyuyoMonth();
+  const records = (kinmuData[m] || []).sort((a,b)=>a.date<b.date?-1:1);
+  const wrap = document.getElementById('kinmu-table-wrap');
+  if (records.length === 0) {
+    wrap.innerHTML = '<div style="color:#898781;font-size:13px;text-align:center;padding:20px">勤務データがありません</div>';
+    return;
+  }
+  let html = '<table style="width:100%;border-collapse:collapse;font-size:12px"><tr style="background:#f5f4f2">' +
+    '<th style="padding:6px;text-align:left">日付</th><th style="padding:6px;text-align:left">氏名</th>' +
+    '<th style="padding:6px;text-align:center">出勤</th><th style="padding:6px;text-align:center">退勤</th>' +
+    '<th style="padding:6px;text-align:right">実働(h)</th><th style="padding:6px;text-align:left">備考</th>' +
+    '<th style="padding:6px"></th></tr>';
+  records.forEach((r, i) => {
+    html += `<tr style="border-bottom:1px solid #eee">
+      <td style="padding:6px">${r.date}</td>
+      <td style="padding:6px">${r.empName}</td>
+      <td style="padding:6px;text-align:center">${r.start||'—'}</td>
+      <td style="padding:6px;text-align:center">${r.end||'—'}</td>
+      <td style="padding:6px;text-align:right">${r.workHours ? Number(r.workHours).toFixed(1) : '—'}</td>
+      <td style="padding:6px">${r.note||''}</td>
+      <td style="padding:6px"><button onclick="deleteKinmu(${i})" style="padding:3px 6px;background:#FEE;color:#c00;border:none;border-radius:5px;font-size:11px;cursor:pointer">削除</button></td>
+    </tr>`;
+  });
+  html += '</table>';
+  wrap.innerHTML = html;
+}
+
+function openAddKinmu() {
+  if (employeeData.length === 0) { showToast('先に社員を追加してください'); showKyuyoTab('kyuyo'); return; }
+  populateKinmuEmpSelect();
+  const m = getKyuyoMonth();
+  document.getElementById('kinmu-date').value = m + '-01';
+  document.getElementById('kinmu-start').value = '09:00';
+  document.getElementById('kinmu-end').value = '18:00';
+  document.getElementById('kinmu-break').value = '60';
+  document.getElementById('kinmu-note').value = '';
+  document.getElementById('kinmu-modal-title').textContent = '勤務追加';
+  document.getElementById('kinmu-modal').style.display = 'flex';
+}
+
+async function saveKinmu() {
+  const date = document.getElementById('kinmu-date').value;
+  const empId = document.getElementById('kinmu-emp').value;
+  const emp = employeeData.find(e => e.id === empId);
+  if (!date || !emp) { showToast('日付と社員を入力してください'); return; }
+  const start = document.getElementById('kinmu-start').value;
+  const end = document.getElementById('kinmu-end').value;
+  const breakMin = Number(document.getElementById('kinmu-break').value)||0;
+  const note = document.getElementById('kinmu-note').value;
+  let workHours = null;
+  if (start && end) {
+    const s = start.split(':').map(Number); const e = end.split(':').map(Number);
+    workHours = ((e[0]*60+e[1]) - (s[0]*60+s[1]) - breakMin) / 60;
+    if (workHours < 0) workHours = 0;
+  }
+  const m = date.slice(0,7);
+  if (!kinmuData[m]) kinmuData[m] = [];
+  kinmuData[m].push({date, empId, empName: emp.name, start, end, breakMin, workHours, note});
+  try { await db.ref('furue/kinmu/'+m).set(sanitizeForFb(kinmuData[m])); } catch(e) {}
+  localStorage.setItem('furue_kinmu_'+m, JSON.stringify(kinmuData[m]));
+  document.getElementById('kinmu-modal').style.display = 'none';
+  renderKinmuTable();
+  showToast('勤務を保存しました');
+}
+
+async function deleteKinmu(idx) {
+  const m = getKyuyoMonth();
+  if (!kinmuData[m]) return;
+  kinmuData[m].splice(idx, 1);
+  try { await db.ref('furue/kinmu/'+m).set(sanitizeForFb(kinmuData[m])); } catch(e) {}
+  localStorage.setItem('furue_kinmu_'+m, JSON.stringify(kinmuData[m]));
+  renderKinmuTable();
+  showToast('削除しました');
+}
+
+function exportKyuyoCSV() {
+  const m = getKyuyoMonth();
+  const rows = [['氏名','区分','基本給','時間外手当','各種手当','社保等控除','所得税','差引支給額']];
+  employeeData.forEach(emp => {
+    const rec = (kyuyoData[m]||[]).find(r => r.empId === emp.id) || {};
+    rows.push([emp.name, emp.type||'', rec.basePay||emp.baseSalary||0, rec.overtimePay||0, rec.allowance||0, rec.socialIns||0, rec.incomeTax||0, rec.net||0]);
+  });
+  downloadCSV(rows, `給与明細_${m}.csv`);
+}
+
+function exportKinmuCSV() {
+  const m = getKyuyoMonth();
+  const rows = [['日付','氏名','出勤時刻','退勤時刻','休憩(分)','実働時間','備考']];
+  (kinmuData[m]||[]).sort((a,b)=>a.date<b.date?-1:1).forEach(r => {
+    rows.push([r.date, r.empName, r.start||'', r.end||'', r.breakMin||60, r.workHours ? Number(r.workHours).toFixed(1) : '', r.note||'']);
+  });
+  downloadCSV(rows, `勤務表_${m}.csv`);
+}
+
+function downloadCSV(rows, filename) {
+  const bom = '\uFEFF';
+  const csv = bom + rows.map(r => r.map(c => '"'+String(c).replace(/"/g,'""')+'"').join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8'}));
+  a.download = filename; a.click();
+}
 </script>
+
+<div id="page-kyuyo" class="page">
+  <div class="form-card" style="padding:12px;margin-bottom:10px">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+      <label style="font-size:13px;font-weight:500">対象月：</label>
+      <input type="month" id="kyuyo-month" style="border:1px solid #ccc;border-radius:6px;padding:4px 8px;font-size:14px">
+      <button onclick="loadKyuyo()" style="padding:4px 12px;background:#185FA5;color:#fff;border:none;border-radius:6px;font-size:13px;cursor:pointer">表示</button>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <button onclick="showKyuyoTab('kyuyo')" id="btn-kyuyo-tab" style="flex:1;padding:8px;background:#185FA5;color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer;font-weight:600">給与明細</button>
+      <button onclick="showKyuyoTab('kinmu')" id="btn-kinmu-tab" style="flex:1;padding:8px;background:#fff;color:#185FA5;border:1.5px solid #185FA5;border-radius:8px;font-size:13px;cursor:pointer">勤務表</button>
+    </div>
+  </div>
+
+  <!-- 給与明細 -->
+  <div id="kyuyo-section">
+    <div class="form-card" style="padding:12px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-size:13px;font-weight:600;color:#52514e">社員一覧・給与明細</div>
+        <button onclick="openAddEmployee()" style="padding:5px 12px;background:#185FA5;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer">＋ 社員追加</button>
+      </div>
+      <div id="kyuyo-table-wrap" style="overflow-x:auto">
+        <div style="color:#898781;font-size:13px;text-align:center;padding:20px">社員を追加してください</div>
+      </div>
+    </div>
+    <button onclick="exportKyuyoCSV()" class="btn-export">📥 給与明細 CSV書き出し</button>
+  </div>
+
+  <!-- 勤務表 -->
+  <div id="kinmu-section" style="display:none">
+    <div class="form-card" style="padding:12px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-size:13px;font-weight:600;color:#52514e">勤務表</div>
+        <button onclick="openAddKinmu()" style="padding:5px 12px;background:#185FA5;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer">＋ 勤務追加</button>
+      </div>
+      <div id="kinmu-table-wrap" style="overflow-x:auto">
+        <div style="color:#898781;font-size:13px;text-align:center;padding:20px">勤務データを追加してください</div>
+      </div>
+    </div>
+    <button onclick="exportKinmuCSV()" class="btn-export">📥 勤務表 CSV書き出し</button>
+  </div>
+</div>
+
+<!-- 社員追加モーダル -->
+<div id="employee-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;padding:20px;align-items:center">
+  <div style="background:#fff;border-radius:14px;padding:20px;max-width:400px;width:100%;margin:auto">
+    <div style="font-size:16px;font-weight:600;margin-bottom:14px" id="emp-modal-title">社員追加</div>
+    <input type="hidden" id="emp-edit-id">
+    <div style="margin-bottom:10px"><label style="font-size:13px;color:#52514e">氏名</label><input type="text" id="emp-name" style="width:100%;border:1px solid #ccc;border-radius:8px;padding:8px;font-size:14px;box-sizing:border-box;margin-top:4px" placeholder="例: 山田 太郎"></div>
+    <div style="margin-bottom:10px"><label style="font-size:13px;color:#52514e">区分</label><select id="emp-type" style="width:100%;border:1px solid #ccc;border-radius:8px;padding:8px;font-size:14px;box-sizing:border-box;margin-top:4px"><option value="正社員">正社員</option><option value="パート">パート・アルバイト</option><option value="役員">役員</option></select></div>
+    <div style="margin-bottom:10px"><label style="font-size:13px;color:#52514e">基本給（月額）</label><input type="number" id="emp-base" style="width:100%;border:1px solid #ccc;border-radius:8px;padding:8px;font-size:14px;box-sizing:border-box;margin-top:4px" placeholder="250000"></div>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button onclick="saveEmployee()" style="flex:1;padding:10px;background:#185FA5;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer;font-weight:500">保存</button>
+      <button onclick="document.getElementById('employee-modal').style.display='none'" style="flex:1;padding:10px;background:#f5f4f2;color:#52514e;border:none;border-radius:8px;font-size:14px;cursor:pointer">キャンセル</button>
+    </div>
+  </div>
+</div>
+
+<!-- 勤務追加モーダル -->
+<div id="kinmu-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;padding:20px;align-items:center">
+  <div style="background:#fff;border-radius:14px;padding:20px;max-width:400px;width:100%;margin:auto">
+    <div style="font-size:16px;font-weight:600;margin-bottom:14px" id="kinmu-modal-title">勤務追加</div>
+    <input type="hidden" id="kinmu-edit-idx">
+    <div style="margin-bottom:10px"><label style="font-size:13px;color:#52514e">日付</label><input type="date" id="kinmu-date" style="width:100%;border:1px solid #ccc;border-radius:8px;padding:8px;font-size:14px;box-sizing:border-box;margin-top:4px"></div>
+    <div style="margin-bottom:10px"><label style="font-size:13px;color:#52514e">社員</label><select id="kinmu-emp" style="width:100%;border:1px solid #ccc;border-radius:8px;padding:8px;font-size:14px;box-sizing:border-box;margin-top:4px"><option value="">選択してください</option></select></div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+      <div><label style="font-size:13px;color:#52514e">出勤時刻</label><input type="time" id="kinmu-start" style="width:100%;border:1px solid #ccc;border-radius:8px;padding:8px;font-size:14px;box-sizing:border-box;margin-top:4px"></div>
+      <div><label style="font-size:13px;color:#52514e">退勤時刻</label><input type="time" id="kinmu-end" style="width:100%;border:1px solid #ccc;border-radius:8px;padding:8px;font-size:14px;box-sizing:border-box;margin-top:4px"></div>
+    </div>
+    <div style="margin-bottom:10px"><label style="font-size:13px;color:#52514e">休憩（分）</label><input type="number" id="kinmu-break" style="width:100%;border:1px solid #ccc;border-radius:8px;padding:8px;font-size:14px;box-sizing:border-box;margin-top:4px" placeholder="60" value="60"></div>
+    <div style="margin-bottom:10px"><label style="font-size:13px;color:#52514e">備考</label><input type="text" id="kinmu-note" style="width:100%;border:1px solid #ccc;border-radius:8px;padding:8px;font-size:14px;box-sizing:border-box;margin-top:4px"></div>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button onclick="saveKinmu()" style="flex:1;padding:10px;background:#185FA5;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer;font-weight:500">保存</button>
+      <button onclick="document.getElementById('kinmu-modal').style.display='none'" style="flex:1;padding:10px;background:#f5f4f2;color:#52514e;border:none;border-radius:8px;font-size:14px;cursor:pointer">キャンセル</button>
+    </div>
+  </div>
+</div>
 </body>
 </html>

@@ -493,6 +493,11 @@ function showDetail(type, idx) {
      <input type="text" id="inv-input" placeholder="T1234567890123" value="${r['インボイス番号']||''}">
      <button onclick="saveInvoice('${type}',${idx})">保存</button>
    </div>` : '';
+  const pdfInputSection = `<div style="margin-top:12px;font-size:13px;font-weight:500;color:#52514e;">原紙PDFファイル名（OneDrive）</div>
+   <div class="invoice-field">
+     <input type="text" id="pdf-input" placeholder="例: ○○請求書2607.pdf" value="${r['原紙PDF']||''}">
+     <button onclick="savePDFLink('${type}',${idx})">保存</button>
+   </div>`;
   document.getElementById('modal-body').innerHTML = photoBtn + pdfViewBtn + fields.map(([k,v])=>
     `<div class="detail-row"><span class="detail-label">${k}</span><span class="detail-value">${v||'—'}</span></div>`
   ).join('') + pdfInputSection + invoiceSection;

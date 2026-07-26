@@ -315,22 +315,46 @@ function saveLocalPhoto(no, base64) {
   try { localStorage.setItem('furue_photos', JSON.stringify(p)); } catch {}
 }
 
+// ===== FIREBASE KEY SANITIZER (Firebase doesn't allow '.' in keys) =====
+function sanitizeForFb(data) {
+  if (Array.isArray(data)) return data.map(sanitizeForFb);
+  if (data && typeof data === 'object') {
+    const out = {};
+    for (const [k, v] of Object.entries(data)) {
+      out[k.replace(/\./g, '_')] = sanitizeForFb(v);
+    }
+    return out;
+  }
+  return data;
+}
+function restoreFromFb(data) {
+  if (Array.isArray(data)) return data.map(restoreFromFb);
+  if (data && typeof data === 'object') {
+    const out = {};
+    for (const [k, v] of Object.entries(data)) {
+      out[k === 'No_' ? 'No.' : k] = restoreFromFb(v);
+    }
+    return out;
+  }
+  return data;
+}
+
 async function loadAllData() {
   try {
     const snap = await db.ref('furue').once('value');
     const val = snap.val();
     const photos = getLocalPhotos();
     if (val && val.ryoshu) {
-      ryoshuData = val.ryoshu.filter(Boolean).map(r => ({...r, photo: photos[String(r['No.'])] || null}));
+      ryoshuData = restoreFromFb(val.ryoshu).filter(Boolean).map(r => ({...r, photo: photos[String(r['No.'])] || null}));
     } else {
       ryoshuData = RYOSHU_INIT.map(r => ({...r}));
-      db.ref('furue/ryoshu').set(ryoshuData.map(r => { const c={...r}; delete c.photo; return c; }));
+      db.ref('furue/ryoshu').set(sanitizeForFb(ryoshuData.map(r => { const c={...r}; delete c.photo; return c; })));
     }
     if (val && val.shiire) {
-      shiireData = val.shiire.filter(Boolean);
+      shiireData = restoreFromFb(val.shiire).filter(Boolean);
     } else {
       shiireData = SHIIRE_INIT.map(r => ({...r}));
-      db.ref('furue/shiire').set(shiireData);
+      db.ref('furue/shiire').set(sanitizeForFb(shiireData));
     }
   } catch(e) {
     // オフライン時はlocalStorageにフォールバック
@@ -347,7 +371,7 @@ async function loadAllData() {
 function saveData(key, data) {
   // Firebaseに保存（写真を除く）
   const forFb = data.map(r => { const c={...r}; delete c.photo; return c; });
-  db.ref('furue/'+key).set(forFb).catch(() => showToast('同期エラー（ローカル保存済み）'));
+  db.ref('furue/'+key).set(sanitizeForFb(forFb)).catch(() => showToast('同期エラー（ローカル保存済み）'));
   // localStorageにもバックアップ
   try { localStorage.setItem('furue_'+key, JSON.stringify(data)); } catch {}
 }
@@ -452,21 +476,22 @@ function showDetail(type, idx) {
   document.getElementById('modal-title').textContent = r[nameKey]||'詳細';
   const fields = type==='ryoshu'
     ? [['日付',r['日付']],['内容',r['内容']],['金額（税込）',fmt(r['金額（税込）'])],['支払方法',r['支払方法']],['勘定科目',r['勘定科目（参考）']],['備考',r['備考']],['インボイス番号',r['インボイス番号']||'未入力']]
-    : [['日付',r['日付']],['件名',r['件名']],['金額（税込）',fmt(r['金額（税込）'])],['支払方法',r['支払方法']],['勘定科目',r['勘定科目（参考）']],['備考',r['備考']],['インボイス番号',r['インボイス番号']||'未入力']];
+    : [['日付',r['日付']],['件名',r['件名']],['金額（税込）',fmt(r['金額（税込）'])],['支払方法',r['支払方法']],['勘定科目',r['勘定科目（参考）']],['備考',r['備考']],['原紙PDF',r['原紙PDF']||'なし']];
   const photoBtn = (type==='ryoshu' && r['photo'])
     ? `<button onclick="showPhoto('${type}',${idx})" style="width:100%;padding:11px;background:#E6F1FB;color:#185FA5;border:none;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer;margin-bottom:10px;">📷 原紙を見る（写真）</button>`
     : '';
   const pdfViewBtn = (type==='shiire' && r['原紙PDF'])
     ? `<button onclick="openInvoicePDF('${r['原紙PDF'].replace(/'/g,"\\'")}');" style="width:100%;padding:11px;background:#E6F1FB;color:#185FA5;border:none;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer;margin-bottom:10px;">📄 請求書原紙を開く（OneDrive）</button>`
     : '';
-  document.getElementById('modal-body').innerHTML = photoBtn + pdfViewBtn + fields.map(([k,v])=>
-    `<div class="detail-row"><span class="detail-label">${k}</span><span class="detail-value">${v||'—'}</span></div>`
-  ).join('') +
-  `<div style="margin-top:12px;font-size:13px;font-weight:500;color:#52514e;">インボイス番号を入力</div>
+  const invoiceSection = type==='ryoshu'
+    ? `<div style="margin-top:12px;font-size:13px;font-weight:500;color:#52514e;">インボイス番号を入力</div>
    <div class="invoice-field">
      <input type="text" id="inv-input" placeholder="T1234567890123" value="${r['インボイス番号']||''}">
      <button onclick="saveInvoice('${type}',${idx})">保存</button>
-   </div>`;
+   </div>` : '';
+  document.getElementById('modal-body').innerHTML = photoBtn + pdfViewBtn + fields.map(([k,v])=>
+    `<div class="detail-row"><span class="detail-label">${k}</span><span class="detail-value">${v||'—'}</span></div>`
+  ).join('') + invoiceSection;
   document.getElementById('modal').classList.add('open');
 }
 
@@ -510,8 +535,8 @@ async function migrateData() {
   try {
     const snap = await db.ref('kaikei').once('value');
     const val = snap.val() || {};
-    const existRyoshu = val.ryoshu || RYOSHU_INIT.map(r=>({...r}));
-    const existShiire = val.shiire || SHIIRE_INIT.map(r=>({...r}));
+    const existRyoshu = restoreFromFb(val.ryoshu || RYOSHU_INIT.map(r=>({...r})));
+    const existShiire = restoreFromFb(val.shiire || SHIIRE_INIT.map(r=>({...r})));
 
     // Merge T-numbers into ryoshu from RYOSHU_INIT
     const updatedRyoshu = existRyoshu.map(r => {
@@ -533,7 +558,7 @@ async function migrateData() {
       return r;
     });
 
-    await db.ref('kaikei').set({ryoshu: updatedRyoshu, shiire: updatedShiire});
+    await db.ref('kaikei').set(sanitizeForFb({ryoshu: updatedRyoshu, shiire: updatedShiire}));
     ryoshuData = updatedRyoshu;
     shiireData = updatedShiire;
     saveData('ryoshu', ryoshuData);
@@ -607,7 +632,7 @@ function exportCSV(type) {
   const data = type==='ryoshu' ? ryoshuData : shiireData;
   const headers = type==='ryoshu'
     ? ['No.','日付','店舗・支払先','内容','金額（税込）','支払方法','勘定科目（参考）','備考','インボイス番号']
-    : ['No.','日付','請求元','件名','金額（税込）','支払方法','勘定科目（参考）','備考','インボイス番号'];
+    : ['No.','日付','請求元','件名','金額（税込）','支払方法','勘定科目（参考）','備考','原紙PDF'];
   const rows = [headers, ...data.map(r => headers.map(h => r[h]??''))];
   const csv = rows.map(r => r.map(v => `"${String(v||'').replace(/"/g,'""')}"`).join(',')).join('\n');
   const blob = new Blob(['\uFEFF'+csv], {type:'text/csv;charset=utf-8'});

@@ -380,6 +380,23 @@ async function loadAllData() {
       const sc = localStorage.getItem('furue_credit');
       if (sc) creditData = JSON.parse(sc);
     }
+    // Excelから自動同期されたAMEX明細をマージ
+    if (val && val.credit_amex) {
+      Object.entries(val.credit_amex).forEach(([ym6, txObj]) => {
+        const ym = ym6.slice(0,4) + '-' + ym6.slice(4,6);
+        const txs = Object.values(txObj || {}).map(c => ({
+          date: c['日付'] || '',
+          content: c['内容'] || '',
+          amount: Number(c['金額']) || 0,
+          source: 'excel'
+        }));
+        if (!creditData[ym]) creditData[ym] = [];
+        txs.forEach(tx => {
+          const dup = creditData[ym].find(e => e.date===tx.date && e.content===tx.content && e.amount===tx.amount);
+          if (!dup) creditData[ym].push(tx);
+        });
+      });
+    }
     if (val && val.uriage) {
       uriageData = restoreFromFb(val.uriage).filter(Boolean);
     } else {

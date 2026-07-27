@@ -100,6 +100,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;ba
 <div class="navbar">
   <div class="navbar-inner">
     <div class="nav-title">㈲フルエ 会計帳簿</div>
+    <button class="nav-btn" onclick="refreshData()" style="margin-right:10px;font-size:18px;line-height:1" title="データ更新">↻</button>
     <button class="nav-btn" onclick="showPage('nyuryoku')">＋ 新規</button>
   </div>
 </div>
@@ -117,23 +118,31 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;ba
 
 <!-- 領収書 -->
 <div id="page-ryoshu" class="page active">
-  <div class="search-box">
-    <svg width="16" height="16" fill="none" stroke="#898781" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-    <input type="search" id="search-ryoshu" placeholder="店舗名・内容で検索" oninput="filterList('ryoshu')">
+  <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center">
+    <div class="search-box" style="margin-bottom:0;flex:1">
+      <svg width="16" height="16" fill="none" stroke="#898781" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+      <input type="search" id="search-ryoshu" placeholder="店舗名・内容で検索" oninput="filterList('ryoshu')">
+    </div>
+    <select id="ryoshu-month-filter" onchange="renderList('ryoshu')" style="border:1px solid #ccc;border-radius:8px;padding:6px 10px;font-size:13px;background:#fff;height:38px">
+      <option value="">全月</option>
+    </select>
   </div>
   <div class="summary" id="summary-ryoshu"></div>
-  <div class="section-hdr">2026年度 領収書一覧</div>
   <div id="list-ryoshu"></div>
 </div>
 
 <!-- 仕入請求書 -->
 <div id="page-shiire" class="page">
-  <div class="search-box">
-    <svg width="16" height="16" fill="none" stroke="#898781" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
-    <input type="search" id="search-shiire" placeholder="請求元・件名で検索" oninput="filterList('shiire')">
+  <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center">
+    <div class="search-box" style="margin-bottom:0;flex:1">
+      <svg width="16" height="16" fill="none" stroke="#898781" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+      <input type="search" id="search-shiire" placeholder="請求元・件名で検索" oninput="filterList('shiire')">
+    </div>
+    <select id="shiire-month-filter" onchange="renderList('shiire')" style="border:1px solid #ccc;border-radius:8px;padding:6px 10px;font-size:13px;background:#fff;height:38px">
+      <option value="">全月</option>
+    </select>
   </div>
   <div class="summary" id="summary-shiire"></div>
-  <div class="section-hdr">2026年度 仕入請求書一覧</div>
   <div id="list-shiire"></div>
 </div>
 
@@ -227,7 +236,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;ba
 
 <!-- 書き出し -->
 <div id="page-dashboard" class="page">
-  <div id="dash-kpi" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px"></div>
+  <div id="dash-kpi" style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:12px"></div>
   <div class="form-card" style="padding:14px">
     <div style="font-size:13px;font-weight:500;margin-bottom:10px;color:#52514e">月別 売上 vs 仕入請求</div>
     <div style="position:relative;height:180px"><canvas id="chart-uriage"></canvas></div>
@@ -426,11 +435,17 @@ function renderDashboard() {
   // KPI
   const rTotal = ryoshuData.reduce((s,r)=>s+(Number(r['金額（税込）'])||0),0);
   const sTotal = shiireData.reduce((s,r)=>s+(Number(r['金額（税込）'])||0),0);
+  const uriageTotal = uriageData.reduce((s,r)=>s+(Number(r['金額（税別）'])||0),0);
   const kyuyoTotal = [286179,215745,230016,325751,380625,309495,306260,306260,343750,379699,338422,400038].reduce((a,b)=>a+b,0);
   const kpiEl = document.getElementById('dash-kpi');
   kpiEl.innerHTML = `
+    <div style="background:#d1f7e0;border-radius:10px;padding:12px">
+      <div style="font-size:11px;color:#155724;margin-bottom:3px">売上合計（税別）</div>
+      <div style="font-size:20px;font-weight:600;color:#155724">¥${uriageTotal.toLocaleString()}</div>
+      <div style="font-size:11px;color:#2e7d32">${uriageData.length}件</div>
+    </div>
     <div style="background:#E6F1FB;border-radius:10px;padding:12px">
-      <div style="font-size:11px;color:#185FA5;margin-bottom:3px">領収書合計</div>
+      <div style="font-size:11px;color:#185FA5;margin-bottom:3px">経費（領収書）</div>
       <div style="font-size:20px;font-weight:600;color:#185FA5">¥${rTotal.toLocaleString()}</div>
       <div style="font-size:11px;color:#378ADD">${ryoshuData.length}件</div>
     </div>
@@ -440,9 +455,24 @@ function renderDashboard() {
       <div style="font-size:11px;color:#EF9F27">${shiireData.length}件</div>
     </div>`;
 
+  // 月別売上（uriageDataから集計）
+  const monthKeys=['202604','202605','202606','202607','202608','202609','202610','202611','202612','202701','202702','202703'];
   const months=['4月','5月','6月','7月','8月','9月','10月','11月','12月','1月','2月','3月'];
-  const uriage=[35758100,21740370,0,0,0,0,0,0,0,0,0,0];
-  const shiireM=[12117263,6017178,5464274,3541214,0,0,0,0,0,0,0,0];
+  const uriageByMonth = {};
+  uriageData.forEach(r => {
+    const m = (r['日付']||'').replace(/\//g,'').slice(0,6);
+    if (m) uriageByMonth[m] = (uriageByMonth[m]||0) + (Number(r['金額（税別）'])||0);
+  });
+  const uriage = monthKeys.map(m => uriageByMonth[m]||0);
+
+  // 仕入月別
+  const shiireByMonth = {};
+  shiireData.forEach(r => {
+    const m = (r['日付']||'').replace(/\//g,'').slice(0,6);
+    if (m) shiireByMonth[m] = (shiireByMonth[m]||0) + (Number(r['金額（税込）'])||0);
+  });
+  const shiireM = monthKeys.map(m => shiireByMonth[m]||0);
+
   const kyuyo=[286179,215745,230016,325751,380625,309495,306260,306260,343750,379699,338422,400038];
 
   function mkChart(id, cfg) {
@@ -453,9 +483,23 @@ function renderDashboard() {
 
   const tiny = {responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{font:{size:10},boxWidth:10}},tooltip:{callbacks:{label:c=>'¥'+c.raw.toLocaleString()}}},scales:{x:{ticks:{font:{size:9}}},y:{ticks:{callback:v=>v>=1000000?'¥'+(v/1000000).toFixed(0)+'M':'¥'+(v/10000).toFixed(0)+'万',font:{size:9}},grid:{color:'rgba(0,0,0,0.04)'}}}};
 
-  mkChart('chart-uriage',{type:'bar',data:{labels:months,datasets:[{label:'売上',data:uriage,backgroundColor:'#185FA5',borderRadius:3},{label:'仕入',data:shiireM,backgroundColor:'#EF9F27',borderRadius:3}]},options:tiny});
+  mkChart('chart-uriage',{type:'bar',data:{labels:months,datasets:[{label:'売上（税別）',data:uriage,backgroundColor:'#2e7d32',borderRadius:3},{label:'仕入（税込）',data:shiireM,backgroundColor:'#EF9F27',borderRadius:3}]},options:tiny});
   mkChart('chart-kyuyo',{type:'line',data:{labels:months,datasets:[{label:'給与',data:kyuyo,borderColor:'#A32D2D',backgroundColor:'rgba(163,45,45,0.1)',borderWidth:2,pointRadius:2,tension:0.3,fill:true}]},options:{...tiny,plugins:{...tiny.plugins,legend:{display:false}}}});
-  mkChart('chart-shiire-pie',{type:'doughnut',data:{labels:['4月','5月','6月','7月'],datasets:[{data:[12117263,6017178,5464274,3541214],backgroundColor:['#185FA5','#0C447C','#378ADD','#85B7EB'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:9},boxWidth:8}},tooltip:{callbacks:{label:c=>'¥'+(c.raw/10000).toFixed(0)+'万'}}},cutout:'55%'}});
+  const pieLabels = monthKeys.filter((_,i)=>shiireM[i]>0).map(m=>Number(m.slice(4))+'月');
+  const pieData = shiireM.filter(v=>v>0);
+  const pieColors = ['#185FA5','#0C447C','#378ADD','#85B7EB','#2e7d32','#4CAF50','#FFC107','#FF5722','#9C27B0','#00BCD4','#E91E63','#607D8B'];
+  mkChart('chart-shiire-pie',{type:'doughnut',data:{labels:pieLabels,datasets:[{data:pieData,backgroundColor:pieColors.slice(0,pieData.length),borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:9},boxWidth:8}},tooltip:{callbacks:{label:c=>'¥'+(c.raw/10000).toFixed(0)+'万'}}},cutout:'55%'}});
+}
+
+async function refreshData() {
+  showToast('データを更新中...');
+  await loadAllData();
+  const active = document.querySelector('.tab.active');
+  if (active) {
+    const name = active.getAttribute('onclick').match(/'(\w+)'/)?.[1];
+    if (name) showPage(name);
+  }
+  showToast('✅ 更新完了');
 }
 
 // ===== RENDER =====
@@ -464,14 +508,32 @@ function fmt(n) {
   return '¥'+Number(n).toLocaleString();
 }
 
+function populateMonthFilter(type, data) {
+  const sel = document.getElementById(type+'-month-filter');
+  if (!sel) return;
+  const months = [...new Set(data.map(r => {
+    const d = r['日付'] || '';
+    return d.replace(/\//g,'').slice(0,6);
+  }).filter(m => m.length === 6))].sort();
+  const cur = sel.value;
+  sel.innerHTML = '<option value="">全月</option>' + months.map(m =>
+    `<option value="${m}"${m===cur?' selected':''}>${m.slice(0,4)}年${Number(m.slice(4))}月</option>`
+  ).join('');
+}
+
 function renderList(type) {
   const data = type === 'ryoshu' ? ryoshuData : shiireData;
+  populateMonthFilter(type, data);
+  const monthFilter = (document.getElementById(type+'-month-filter')||{}).value || '';
   const q = document.getElementById('search-'+type).value.toLowerCase();
-  const filtered = q ? data.filter(r => {
+  let filtered = monthFilter
+    ? data.filter(r => (r['日付']||'').replace(/\//g,'').slice(0,6) === monthFilter)
+    : data;
+  filtered = q ? filtered.filter(r => {
     const s = type==='ryoshu' ? r['店舗・支払先'] : r['請求元'];
     const c = type==='ryoshu' ? r['内容'] : r['件名'];
     return (s||'').toLowerCase().includes(q)||(c||'').toLowerCase().includes(q);
-  }) : data;
+  }) : filtered;
 
   const total = filtered.reduce((s,r) => s+(Number(r['金額（税込）'])||0), 0);
   const noInvoice = filtered.filter(r => !r['インボイス番号']).length;
@@ -1344,14 +1406,15 @@ function renderUriagePage() {
   const total = rows.reduce((s,r) => s + (Number(r['金額（税別）'])||0), 0);
   const totalTax = Math.round(total * 1.1);
   const pending = rows.filter(r => !r['請求']).reduce((s,r) => s + (Number(r['金額（税別）'])||0), 0);
+  const furikomi = rows.filter(r => r['振込完了']).reduce((s,r) => s + (Number(r['金額（税別）'])||0), 0);
   document.getElementById('summary-uriage').innerHTML = `
     <div>
       <div class="summary-label">${filter ? filter.slice(0,4)+'年'+Number(filter.slice(4))+'月' : '2026年度'} 売上合計（税別）</div>
       <div class="summary-amount">¥${total.toLocaleString()}</div>
     </div>
     <div style="text-align:right">
-      <div class="summary-label">未請求</div>
-      <div style="font-size:16px;font-weight:600">¥${pending.toLocaleString()}</div>
+      <div class="summary-label">未請求 / 振込済</div>
+      <div style="font-size:14px;font-weight:600">¥${pending.toLocaleString()} / ¥${furikomi.toLocaleString()}</div>
     </div>`;
 
   // list
@@ -1372,7 +1435,7 @@ function renderUriagePage() {
       </div>
       <div class="entry-sub" style="margin-bottom:6px">${r['日付']||''} ／ ${r['元請け']||''}</div>
       <div class="entry-sub" style="margin-bottom:8px">${r['工事名']||''}</div>
-      <div style="display:flex;gap:12px;font-size:13px">
+      <div style="display:flex;gap:12px;font-size:13px;flex-wrap:wrap">
         <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
           <input type="checkbox" ${r['検収'] ? 'checked' : ''} onchange="saveUriageCheck(${globalIdx},'検収',this.checked)" style="width:16px;height:16px;accent-color:#185FA5">
           検収
@@ -1384,6 +1447,10 @@ function renderUriagePage() {
         <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
           <input type="checkbox" ${r['日報'] ? 'checked' : ''} onchange="saveUriageCheck(${globalIdx},'日報',this.checked)" style="width:16px;height:16px;accent-color:#185FA5">
           日報完了書
+        </label>
+        <label style="display:flex;align-items:center;gap:4px;cursor:pointer">
+          <input type="checkbox" ${r['振込完了'] ? 'checked' : ''} onchange="saveUriageCheck(${globalIdx},'振込完了',this.checked)" style="width:16px;height:16px;accent-color:#2e7d32">
+          <span style="color:#2e7d32;font-weight:500">振込完了</span>
         </label>
       </div>
     </div>`;

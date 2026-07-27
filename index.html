@@ -145,6 +145,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;ba
   </div>
   <div class="summary" id="summary-shiire"></div>
   <div id="list-shiire"></div>
+  <div id="shiire-pdf-gallery"></div>
 </div>
 
 <!-- 新規入力 -->
@@ -407,6 +408,9 @@ async function loadAllData() {
     if (val && val.ryoshu_pdfs) {
       ryoshuPdfs = restoreFromFb(val.ryoshu_pdfs).filter(Boolean);
     }
+    if (val && val.shiire_pdfs) {
+      shiirePdfs = restoreFromFb(val.shiire_pdfs).filter(Boolean);
+    }
   } catch(e) {
     // オフライン時はlocalStorageにフォールバック
     const sr = localStorage.getItem('furue_ryoshu');
@@ -434,6 +438,7 @@ function saveData(key, data) {
 let ryoshuData = [];
 let shiireData = [];
 let ryoshuPdfs = [];
+let shiirePdfs = [];
 let uriageData = [];
 
 // ===== TABS =====
@@ -443,8 +448,8 @@ function showPage(name) {
   document.getElementById('page-'+name).classList.add('active');
   const idx = {'ryoshu':0,'shiire':1,'nyuryoku':2,'dashboard':3,'export':4,'kyuyo':5,'uriage':6,'credit':7}[name];
   document.querySelectorAll('.tab')[idx].classList.add('active');
-  if (name === 'ryoshu') { renderList('ryoshu'); renderRyoshuPdfGallery(); }
-  if (name === 'shiire') renderList('shiire');
+  if (name === 'ryoshu') { renderList('ryoshu'); renderPdfGallery('ryoshu', ryoshuPdfs); }
+  if (name === 'shiire') { renderList('shiire'); renderPdfGallery('shiire', shiirePdfs); }
   if (name === 'dashboard') renderDashboard();
   if (name === 'kyuyo') initKyuyoPage();
   if (name === 'uriage') renderUriagePage();
@@ -583,22 +588,26 @@ function renderList(type) {
 
 function filterList(type) { renderList(type); }
 
-// ===== 領収書 PDF ギャラリー =====
-function renderRyoshuPdfGallery() {
-  const el = document.getElementById('ryoshu-pdf-gallery');
+// ===== PDF ギャラリー（領収書・仕入請求書共用）=====
+function renderPdfGallery(type, pdfs) {
+  const el = document.getElementById(type+'-pdf-gallery');
   if (!el) return;
-  if (!ryoshuPdfs || ryoshuPdfs.length === 0) { el.innerHTML = ''; return; }
-  const items = ryoshuPdfs.map(p => `
-    <a href="${p.url}" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:#fff;border-radius:8px;margin-bottom:6px;border:0.5px solid #e0e0e0;text-decoration:none;color:#0b0b0b">
-      <span style="font-size:20px">📄</span>
-      <span style="font-size:13px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${p['ファイル名']||p.url}</span>
+  if (!pdfs || pdfs.length === 0) { el.innerHTML = ''; return; }
+  const label = type === 'ryoshu' ? '原紙PDF一覧' : '仕入請求書PDF一覧';
+  const items = pdfs.map(p => {
+    const fname = p['ファイル名'] || p.url;
+    const isImg = /\.(jpg|jpeg|png)$/i.test(fname);
+    return `<a href="${p.url}" target="_blank" rel="noopener" style="display:flex;align-items:center;gap:10px;padding:9px 12px;background:#fff;border-radius:8px;margin-bottom:6px;border:0.5px solid #e0e0e0;text-decoration:none;color:#0b0b0b">
+      <span style="font-size:20px">${isImg ? '🖼️' : '📄'}</span>
+      <span style="font-size:13px;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${fname}</span>
       <span style="font-size:11px;color:#185FA5;white-space:nowrap">開く ↗</span>
-    </a>`).join('');
+    </a>`;
+  }).join('');
   el.innerHTML = `<div style="margin-top:16px">
-    <div class="section-hdr" style="cursor:pointer" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'block':'none'">
-      📎 原紙PDF一覧（${ryoshuPdfs.length}枚） ▾
+    <div class="section-hdr" style="cursor:pointer" onclick="const d=this.nextElementSibling;d.style.display=d.style.display==='none'?'block':'none'">
+      📎 ${label}（${pdfs.length}件） ▾
     </div>
-    <div id="pdf-gallery-list">${items}</div>
+    <div>${items}</div>
   </div>`;
 }
 

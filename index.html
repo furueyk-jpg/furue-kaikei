@@ -313,6 +313,28 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;ba
   <button class="btn-export" style="background:#F3FFF3;border-color:#388E3C;color:#1B5E20;margin-top:8px;" onclick="addRyoshu26Records()">📎 領収書26の18件＋原紙PDFを追加</button>
   <div style="font-size:12px;color:#898781;margin-top:6px;line-height:1.6;">領収書26.xlsx（2026年5〜6月分）の18件をPDFリンク付きで領収書データに追加します。重複チェックあり。</div>
 
+  <!-- モノタロウ取込 -->
+  <div class="section-hdr" style="margin-top:12px">モノタロウ 取込</div>
+  <div style="background:#F0F9F0;border:1.5px solid #4CAF50;border-radius:12px;padding:14px 16px;margin-bottom:10px;">
+    <div style="font-size:13px;font-weight:600;color:#1B5E20;margin-bottom:6px;">🛒 モノタロウ注文履歴を取り込む</div>
+    <div style="font-size:12px;color:#2E7D32;margin-bottom:10px;line-height:1.7;">
+      ① <b>monotaro_import.py</b> を実行して <code style="background:#fff;padding:1px 4px;border-radius:4px;font-size:11px">monotaro_import_output.json</code> を作成<br>
+      ② またはモノタロウの注文履歴ページから <b>CSV</b> をダウンロード<br>
+      ③ 下のボタンでファイルを選択 → プレビューして「取込む」
+    </div>
+    <label for="monotaro-file-input" style="display:block;padding:11px;background:#388E3C;color:#fff;border-radius:10px;text-align:center;font-size:14px;font-weight:500;cursor:pointer;margin-bottom:0">
+      📂 ファイルを選択（JSON または CSV）
+    </label>
+    <input type="file" id="monotaro-file-input" accept=".json,.csv" style="display:none" onchange="loadMonotaroFile(this)">
+    <div id="monotaro-preview" style="display:none;margin-top:10px;background:#fff;border-radius:10px;border:0.5px solid #ccc;overflow:hidden;">
+      <div style="padding:10px 14px;background:#E8F5E9;border-bottom:1px solid #C8E6C9;display:flex;justify-content:space-between;align-items:center">
+        <span id="monotaro-preview-title" style="font-size:13px;font-weight:600;color:#1B5E20"></span>
+        <button onclick="importMonotaroData()" style="background:#388E3C;color:#fff;border:none;border-radius:8px;padding:7px 16px;font-size:13px;font-weight:600;cursor:pointer">✅ 取込む</button>
+      </div>
+      <div id="monotaro-preview-list" style="max-height:220px;overflow-y:auto;font-size:12px;"></div>
+    </div>
+  </div>
+
   <div style="margin-top:16px;text-align:center;font-size:12px;color:#898781;">
     iPhoneのSafariでこのページを開き<br>「共有」→「ホーム画面に追加」でアプリとして使えます
   </div>
@@ -2399,5 +2421,191 @@ function importCreditCSV(input) {
     </div>
   </div>
 </div>
+
+<script>
+// ===== モノタロウ取込 =====
+let _monotaroData = [];
+
+function loadMonotaroFile(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const text = e.target.result;
+    if (file.name.toLowerCase().endsWith('.json')) {
+      try {
+        _monotaroData = JSON.parse(text);
+        if (!Array.isArray(_monotaroData)) throw new Error('配列ではありません');
+        _showMonotaroPreview();
+      } catch(err) {
+        showToast('JSONファイルの読み込みに失敗しました: ' + err.message);
+        _monotaroData = [];
+      }
+    } else {
+      _monotaroData = _parseMonotaroCsv(text);
+      if (_monotaroData.length === 0) {
+        showToast('CSVを解析できませんでした（日付・金額列が見つかりません）');
+      } else {
+        _showMonotaroPreview();
+      }
+    }
+    input.value = '';
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+
+function _parseMonotaroCsv(csvText) {
+  // BOM 除去
+  if (csvText.charCodeAt(0) === 0xFEFF) csvText = csvText.slice(1);
+  const lines = csvText.split(/\r?\n/).map(l => l.trim()).filter(l => l);
+  if (lines.length < 2) return [];
+
+  const headers = _parseCsvLine(lines[0]).map(h => h.trim());
+  const findCol = (...names) => {
+    for (const n of names) {
+      const idx = headers.findIndex(h => h.includes(n));
+      if (idx >= 0) return idx;
+    }
+    return -1;
+  };
+
+  const dateCol   = findCol('受注日', '注文日', '日付');
+  const noCol     = findCol('注文番号', '受注番号', '注文No');
+  const nameCol   = findCol('商品名', '品名', '商品');
+  const amtCol    = findCol('合計金額', '注文金額', '金額(税込)', '税込金額', '合計');
+  const priceCol  = findCol('単価(税込)', '税込単価', '単価');
+  const qtyCol    = findCol('数量', '個数', 'Qty');
+  const payCol    = findCol('支払方法', '決済方法');
+
+  if (dateCol < 0) return [];
+
+  const getCell = (row, idx) => (idx >= 0 && idx < row.length) ? row[idx].trim() : '';
+  const parseAmt = s => parseInt(s.replace(/[^\d]/g, '') || '0', 10) || 0;
+
+  const orderMap = {};
+
+  for (let i = 1; i < lines.length; i++) {
+    const row = _parseCsvLine(lines[i]);
+    const dateRaw = getCell(row, dateCol);
+    if (!dateRaw) continue;
+    const dm = dateRaw.match(/(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+    if (!dm) continue;
+    const dateStr = `${dm[1]}/${dm[2].padStart(2,'0')}/${dm[3].padStart(2,'0')}`;
+
+    const orderNo = getCell(row, noCol);
+    const key = orderNo || dateStr;
+
+    let amount = amtCol >= 0 ? parseAmt(getCell(row, amtCol)) : 0;
+    if (!amount && priceCol >= 0 && qtyCol >= 0) {
+      amount = parseAmt(getCell(row, priceCol)) * (parseAmt(getCell(row, qtyCol)) || 1);
+    }
+
+    const itemName = nameCol >= 0 ? getCell(row, nameCol).slice(0, 40) : '';
+    const payRaw   = getCell(row, payCol);
+    const payment  = /振込|銀行/.test(payRaw) ? '振込'
+                   : /現金|代引/.test(payRaw) ? '現金'
+                   : 'クレジット';
+
+    if (!orderMap[key]) {
+      orderMap[key] = {
+        '日付': dateStr,
+        '店舗・支払先': 'モノタロウ',
+        '内容': '',
+        '金額（税込）': 0,
+        '支払方法': payment,
+        '勘定科目（参考）': '消耗品費',
+        '備考': orderNo ? `注文番号: ${orderNo}` : null,
+        'インボイス番号': 'T3070001004865',
+        '原紙PDF': null,
+        _items: [],
+        _useMax: amtCol >= 0,
+      };
+    }
+    const entry = orderMap[key];
+    if (entry._useMax) {
+      entry['金額（税込）'] = Math.max(entry['金額（税込）'], amount);
+    } else {
+      entry['金額（税込）'] += amount;
+    }
+    if (itemName) entry._items.push(itemName);
+  }
+
+  return Object.values(orderMap).map(o => {
+    const items = o._items || [];
+    delete o._items; delete o._useMax;
+    o['内容'] = items.length === 0 ? '消耗品'
+              : items.length === 1 ? items[0]
+              : `${items[0]}（他${items.length - 1}点）`;
+    return o;
+  }).filter(o => o['金額（税込）'] > 0)
+    .sort((a, b) => a['日付'] < b['日付'] ? -1 : 1);
+}
+
+function _parseCsvLine(line) {
+  const result = [];
+  let cur = '', inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') {
+      if (inQ && line[i + 1] === '"') { cur += '"'; i++; }
+      else inQ = !inQ;
+    } else if (c === ',' && !inQ) { result.push(cur); cur = ''; }
+    else cur += c;
+  }
+  result.push(cur);
+  return result;
+}
+
+function _showMonotaroPreview() {
+  const data = _monotaroData;
+  if (!data || !data.length) { showToast('インポートできるデータがありません'); return; }
+
+  const existing = new Set(ryoshuData.map(r => `${r['日付']}_${r['金額（税込）']}`));
+  const newItems = data.filter(o => !existing.has(`${o['日付']}_${o['金額（税込）']}`));
+
+  document.getElementById('monotaro-preview-title').textContent =
+    `${data.length}件取得（新規: ${newItems.length}件 / 重複: ${data.length - newItems.length}件）`;
+
+  const listEl = document.getElementById('monotaro-preview-list');
+  listEl.innerHTML = data.map(o => {
+    const dup = existing.has(`${o['日付']}_${o['金額（税込）']}`);
+    return `<div style="padding:7px 12px;border-bottom:0.5px solid #f0f0f0;${dup ? 'color:#bbb' : ''}">
+      ${dup ? '⬜' : '🆕'}&ensp;${o['日付']}&ensp;¥${Number(o['金額（税込）']).toLocaleString()}&ensp;${(o['内容'] || '').slice(0, 28)}
+    </div>`;
+  }).join('');
+
+  document.getElementById('monotaro-preview').style.display = 'block';
+  if (!newItems.length) showToast('すべて重複しています');
+}
+
+async function importMonotaroData() {
+  const data = _monotaroData;
+  if (!data || !data.length) return;
+
+  const existing = new Set(ryoshuData.map(r => `${r['日付']}_${r['金額（税込）']}`));
+  const newItems  = data.filter(o => !existing.has(`${o['日付']}_${o['金額（税込）']}`));
+  if (!newItems.length) { showToast('追加できる新規データがありません'); return; }
+
+  const maxNo = ryoshuData.reduce((m, r) => typeof r['No.'] === 'number' ? Math.max(m, r['No.']) : m, 0);
+  let nextNo = maxNo + 1;
+
+  newItems.forEach(o => {
+    ryoshuData.push({ 'No.': nextNo++, ...o, photo: null });
+  });
+
+  try {
+    await db.ref('furue/credit_ryoshu').set(
+      sanitizeForFb(ryoshuData.map(r => { const c = {...r}; delete c.photo; return c; }))
+    );
+  } catch(e) {
+    saveData('ryoshu', ryoshuData);
+  }
+
+  showToast(`✅ ${newItems.length}件をクレジット領収書に追加しました`);
+  document.getElementById('monotaro-preview').style.display = 'none';
+  _monotaroData = [];
+  showPage('ryoshu');
+}
+</script>
 </body>
 </html>

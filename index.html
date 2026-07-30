@@ -78,6 +78,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;ba
 .toast.show{opacity:1;}
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
@@ -106,7 +107,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;ba
 </div>
 
 <div class="tabs">
-  <button class="tab active" onclick="showPage('ryoshu')">領収書</button>
+  <button class="tab active" onclick="showPage('ryoshu')">クレジット領収書</button>
+  <button class="tab" onclick="showPage('cash_ryoshu')">現金領収書</button>
   <button class="tab" onclick="showPage('shiire')">仕入請求書</button>
   <button class="tab" onclick="showPage('nyuryoku')">新規入力</button>
   <button class="tab" onclick="showPage('dashboard')">集計</button>
@@ -128,8 +130,31 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;ba
     </select>
   </div>
   <div class="summary" id="summary-ryoshu"></div>
+  <div id="automatch-banner" style="display:none;background:#FEF3CD;border:1px solid #fcd34d;border-radius:10px;padding:10px 14px;margin-bottom:10px;font-size:13px;">
+    <div style="font-weight:600;margin-bottom:4px;">📎 原紙PDFが未設定です（<span id="unmatch-count"></span>件）</div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">
+      <button onclick="clearAllInvalidPdfs()" style="background:#dc2626;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:13px;cursor:pointer;font-weight:500;">🗑️ 全件「不明」としてクリア</button>
+      <button onclick="startVisualMatch()" style="background:#185FA5;color:#fff;border:none;border-radius:8px;padding:8px 14px;font-size:13px;cursor:pointer;font-weight:500;">📋 手動マッチング</button>
+    </div>
+  </div>
   <div id="list-ryoshu"></div>
   <div id="ryoshu-pdf-gallery"></div>
+</div>
+
+<!-- 現金領収書 -->
+<div id="page-cash_ryoshu" class="page">
+  <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center">
+    <div class="search-box" style="margin-bottom:0;flex:1">
+      <svg width="16" height="16" fill="none" stroke="#898781" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+      <input type="search" id="search-cash_ryoshu" placeholder="店舗名・内容で検索" oninput="filterList('cash_ryoshu')">
+    </div>
+    <select id="cash_ryoshu-month-filter" onchange="renderList('cash_ryoshu')" style="border:1px solid #ccc;border-radius:8px;padding:6px 10px;font-size:13px;background:#fff;height:38px">
+      <option value="">全月</option>
+    </select>
+  </div>
+  <div class="summary" id="summary-cash_ryoshu"></div>
+  <div id="list-cash_ryoshu"></div>
+  <div id="cash_ryoshu-pdf-gallery"></div>
 </div>
 
 <!-- 仕入請求書 -->
@@ -178,7 +203,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;ba
     <div class="form-row">
       <label>種別</label>
       <select id="f-type">
-        <option value="ryoshu">領収書</option>
+        <option value="ryoshu">領収書（支払方法で自動振り分け）</option>
         <option value="shiire">仕入請求書</option>
       </select>
     </div>
@@ -271,7 +296,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;ba
 
   <!-- CSV -->
   <div class="section-hdr">CSV書き出し（Excel取込用）</div>
-  <button class="btn-export" onclick="exportCSV('ryoshu')">📥 領収書 CSV書き出し</button>
+  <button class="btn-export" onclick="exportCSV('ryoshu')">📥 クレジット領収書 CSV書き出し</button>
+  <button class="btn-export" onclick="exportCSV('cash_ryoshu')">📥 現金領収書 CSV書き出し</button>
   <button class="btn-export" onclick="exportCSV('shiire')">📥 仕入請求書 CSV書き出し</button>
 
   <!-- バックアップ -->
@@ -299,6 +325,56 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;ba
     <div class="modal-title" id="modal-title"></div>
     <div id="modal-body"></div>
     <button class="modal-close" onclick="document.getElementById('modal').classList.remove('open')">閉じる</button>
+  </div>
+</div>
+
+<!-- PDF インラインビューア -->
+<div id="pdf-viewer-overlay" style="display:none;position:fixed;inset:0;z-index:600;background:#222;flex-direction:column;">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#1a1a1a;flex-shrink:0;">
+    <span id="pdf-viewer-title" style="color:#fff;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;"></span>
+    <button onclick="closePdfViewer()" style="background:none;border:none;color:#fff;font-size:22px;cursor:pointer;padding:4px 0 4px 12px;flex-shrink:0;">✕</button>
+  </div>
+  <iframe id="pdf-frame" style="flex:1;width:100%;border:none;background:#fff;" allowfullscreen></iframe>
+</div>
+
+<!-- ビジュアルマッチングUI -->
+<div id="match-ui" style="display:none;position:fixed;inset:0;z-index:700;background:#111;flex-direction:column;">
+  <!-- ヘッダー -->
+  <div style="background:#185FA5;color:#fff;padding:8px 14px;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">
+    <span style="font-size:13px;font-weight:600;">📋 PDF割り当て</span>
+    <button onclick="closeVisualMatch()" style="background:rgba(255,255,255,0.2);border:none;color:#fff;border-radius:6px;padding:4px 12px;font-size:13px;cursor:pointer;">✕ 終了</button>
+  </div>
+  <!-- 上：領収書リスト -->
+  <div style="flex:0 0 38%;overflow-y:auto;background:#1e1e1e;border-bottom:1px solid #333;">
+    <div style="padding:6px 10px;font-size:11px;color:#888;font-weight:500;position:sticky;top:0;background:#1e1e1e;">▼ 領収書をタップして選択</div>
+    <div id="match-rec-list" style="padding:0 8px 8px;"></div>
+  </div>
+  <!-- 下：PDFプレビュー -->
+  <div style="flex:1;display:flex;flex-direction:column;min-height:0;">
+    <div style="background:#2a2a2a;padding:6px 10px;display:flex;align-items:center;gap:6px;flex-shrink:0;">
+      <button onclick="matchNavPdf(-1)" style="background:#444;border:none;color:#fff;border-radius:6px;padding:5px 12px;font-size:15px;cursor:pointer;">‹</button>
+      <span id="match-pdf-label" style="color:#ccc;font-size:11px;flex:1;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+      <button onclick="matchNavPdf(1)" style="background:#444;border:none;color:#fff;border-radius:6px;padding:5px 12px;font-size:15px;cursor:pointer;">›</button>
+    </div>
+    <iframe id="match-pdf-frame" style="flex:1;width:100%;border:none;background:#fff;" src=""></iframe>
+    <div style="background:#111;padding:8px 12px;flex-shrink:0;">
+      <button onclick="matchAssign()" id="match-assign-btn" disabled style="width:100%;background:#666;color:#aaa;border:none;border-radius:10px;padding:12px;font-size:15px;font-weight:600;cursor:not-allowed;">← 上の領収書を選んでください</button>
+    </div>
+  </div>
+</div>
+
+<!-- PDF ピッカー（ファイルが不明な場合） -->
+<div id="pdf-picker-overlay" style="display:none;position:fixed;inset:0;z-index:600;background:rgba(0,0,0,0.5);align-items:flex-end;">
+  <div style="background:#fff;border-radius:20px 20px 0 0;width:100%;max-width:600px;margin:0 auto;max-height:75vh;display:flex;flex-direction:column;">
+    <div style="padding:16px 16px 0;flex-shrink:0;">
+      <div style="width:36px;height:4px;background:#ddd;border-radius:2px;margin:0 auto 14px;"></div>
+      <div style="font-size:16px;font-weight:600;margin-bottom:2px;">📄 PDFを選択してください</div>
+      <div style="font-size:12px;color:#888;margin-bottom:10px;">選択すると自動保存されます</div>
+    </div>
+    <div id="pdf-picker-list" style="overflow-y:auto;flex:1;padding:0 12px;"></div>
+    <div style="padding:12px 16px;flex-shrink:0;">
+      <button onclick="closePdfPicker()" style="width:100%;padding:12px;background:#f5f5f0;color:#333;border:none;border-radius:10px;font-size:15px;cursor:pointer;">キャンセル</button>
+    </div>
   </div>
 </div>
 
@@ -364,11 +440,12 @@ async function loadAllData() {
     const snap = await db.ref('furue').once('value');
     const val = snap.val();
     const photos = getLocalPhotos();
-    if (val && val.ryoshu) {
-      ryoshuData = restoreFromFb(val.ryoshu).filter(Boolean).map(r => ({...r, photo: photos[String(r['No.'])] || null}));
+    if (val && (val.credit_ryoshu || val.ryoshu)) {
+      // credit_ryoshu を優先、旧パス ryoshu にもフォールバック
+      ryoshuData = restoreFromFb(val.credit_ryoshu || val.ryoshu).filter(Boolean).map(r => ({...r, photo: photos[String(r['No.'])] || null}));
     } else {
       ryoshuData = RYOSHU_INIT.map(r => ({...r}));
-      db.ref('furue/ryoshu').set(sanitizeForFb(ryoshuData.map(r => { const c={...r}; delete c.photo; return c; })));
+      db.ref('furue/credit_ryoshu').set(sanitizeForFb(ryoshuData.map(r => { const c={...r}; delete c.photo; return c; })));
     }
     if (val && val.shiire) {
       shiireData = restoreFromFb(val.shiire).filter(Boolean);
@@ -405,19 +482,36 @@ async function loadAllData() {
       uriageData = URIAGE_INIT.map(r => ({...r}));
       db.ref('furue/uriage').set(sanitizeForFb(uriageData));
     }
+    if (val && val.cash_ryoshu) {
+      const photos = getLocalPhotos();
+      cashRyoshuData = restoreFromFb(val.cash_ryoshu).filter(Boolean).map(r => ({...r, photo: photos[String('c'+r['No.'])] || null}));
+    } else {
+      cashRyoshuData = [];
+    }
     if (val && val.ryoshu_pdfs) {
       ryoshuPdfs = restoreFromFb(val.ryoshu_pdfs).filter(Boolean);
     }
     if (val && val.shiire_pdfs) {
       shiirePdfs = restoreFromFb(val.shiire_pdfs).filter(Boolean);
     }
+    // 未マッチのPDFがある場合はバナーを表示
+    const hasUnmatched = ryoshuData.some(r => r['原紙PDF'] && /→A\d+/.test(r['原紙PDF']));
+    const banner = document.getElementById('automatch-banner');
+    if (banner) {
+      const unmatchCount = ryoshuData.filter(r => r['原紙PDF'] && /→A\d+/.test(r['原紙PDF'])).length;
+      banner.style.display = hasUnmatched ? 'block' : 'none';
+      const countEl = document.getElementById('unmatch-count');
+      if (countEl) countEl.textContent = unmatchCount;
+    }
   } catch(e) {
     // オフライン時はlocalStorageにフォールバック
-    const sr = localStorage.getItem('furue_ryoshu');
+    const sr = localStorage.getItem('furue_credit_ryoshu') || localStorage.getItem('furue_ryoshu');
+    const scr = localStorage.getItem('furue_cash_ryoshu');
     const ss = localStorage.getItem('furue_shiire');
     const photos = getLocalPhotos();
     const raw = sr ? JSON.parse(sr) : RYOSHU_INIT.map(r=>({...r}));
     ryoshuData = raw.map(r => ({...r, photo: r.photo || photos[String(r['No.'])] || null}));
+    cashRyoshuData = scr ? JSON.parse(scr) : [];
     shiireData = ss ? JSON.parse(ss) : SHIIRE_INIT.map(r=>({...r}));
     const sc = localStorage.getItem('furue_credit');
     if (sc) creditData = JSON.parse(sc);
@@ -427,15 +521,25 @@ async function loadAllData() {
   }
 }
 
+// 支払方法からクレジット/現金を自動判定
+function detectRyoshuType(shiharihouhou) {
+  const v = (shiharihouhou || '').toUpperCase();
+  const creditKeywords = ['JCB', 'AMEX', 'VISA', 'MASTERCARD', 'クレジット', 'カード', 'CREDIT', 'QUICPAY'];
+  return creditKeywords.some(k => v.includes(k)) ? 'ryoshu' : 'cash_ryoshu';
+}
+
 function saveData(key, data) {
+  // ryoshu は Firebase では credit_ryoshu として保存
+  const fbKey = key === 'ryoshu' ? 'credit_ryoshu' : key;
   // Firebaseに保存（写真を除く）
   const forFb = data.map(r => { const c={...r}; delete c.photo; return c; });
-  db.ref('furue/'+key).set(sanitizeForFb(forFb)).catch(() => showToast('同期エラー（ローカル保存済み）'));
+  db.ref('furue/'+fbKey).set(sanitizeForFb(forFb)).catch(() => showToast('同期エラー（ローカル保存済み）'));
   // localStorageにもバックアップ
-  try { localStorage.setItem('furue_'+key, JSON.stringify(data)); } catch {}
+  try { localStorage.setItem('furue_'+fbKey, JSON.stringify(data)); } catch {}
 }
 
 let ryoshuData = [];
+let cashRyoshuData = [];
 let shiireData = [];
 let ryoshuPdfs = [];
 let shiirePdfs = [];
@@ -446,9 +550,10 @@ function showPage(name) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   document.getElementById('page-'+name).classList.add('active');
-  const idx = {'ryoshu':0,'shiire':1,'nyuryoku':2,'dashboard':3,'export':4,'kyuyo':5,'uriage':6,'credit':7}[name];
+  const idx = {'ryoshu':0,'cash_ryoshu':1,'shiire':2,'nyuryoku':3,'dashboard':4,'export':5,'kyuyo':6,'uriage':7,'credit':8}[name];
   document.querySelectorAll('.tab')[idx].classList.add('active');
   if (name === 'ryoshu') { renderList('ryoshu'); renderPdfGallery('ryoshu', ryoshuPdfs); }
+  if (name === 'cash_ryoshu') { renderList('cash_ryoshu'); renderPdfGallery('cash_ryoshu', []); }
   if (name === 'shiire') { renderList('shiire'); renderPdfGallery('shiire', shiirePdfs); }
   if (name === 'dashboard') renderDashboard();
   if (name === 'kyuyo') initKyuyoPage();
@@ -549,7 +654,7 @@ function populateMonthFilter(type, data) {
 }
 
 function renderList(type) {
-  const data = type === 'ryoshu' ? ryoshuData : shiireData;
+  const data = type === 'ryoshu' ? ryoshuData : type === 'cash_ryoshu' ? cashRyoshuData : shiireData;
   populateMonthFilter(type, data);
   const monthFilter = (document.getElementById(type+'-month-filter')||{}).value || '';
   const q = document.getElementById('search-'+type).value.toLowerCase();
@@ -573,12 +678,13 @@ function renderList(type) {
     return;
   }
   container.innerHTML = filtered.map((r,i) => {
-    const name = type==='ryoshu' ? r['店舗・支払先'] : r['請求元'];
-    const sub = type==='ryoshu' ? r['内容'] : r['件名'];
+    const name = (type==='ryoshu'||type==='cash_ryoshu') ? r['店舗・支払先'] : r['請求元'];
+    const sub = (type==='ryoshu'||type==='cash_ryoshu') ? r['内容'] : r['件名'];
     const inv = r['インボイス番号'];
     const badge = inv ? `<span class="badge ok">✓ インボイス</span>` : `<span class="badge">インボイス未入力</span>`;
-    const pdfFn = type==='ryoshu' ? 'openReceiptPDF' : 'openInvoicePDF';
-    const pdfBtn = r['原紙PDF'] ? `<button onclick="event.stopPropagation();${pdfFn}('${r['原紙PDF'].replace(/'/g,"\\'")}');" style="padding:3px 8px;background:#E6F1FB;color:#185FA5;border:none;border-radius:6px;font-size:12px;cursor:pointer;margin-left:6px;">📄 原紙</button>` : '';
+    const pdfFn = (type==='ryoshu'||type==='cash_ryoshu') ? 'openReceiptPDF' : 'openInvoicePDF';
+    const pdfNoArg = (type==='ryoshu'||type==='cash_ryoshu') ? `,${r['No_']||''}` : '';
+    const pdfBtn = r['原紙PDF'] ? `<button onclick="event.stopPropagation();${pdfFn}('${r['原紙PDF'].replace(/'/g,"\\'")}' ${pdfNoArg});" style="padding:3px 8px;background:#E6F1FB;color:#185FA5;border:none;border-radius:6px;font-size:12px;cursor:pointer;margin-left:6px;">📄 原紙</button>` : '';
     return `<div class="entry" onclick="showDetail('${type}',${data.indexOf(r)})">
       <div class="entry-top"><span class="entry-name">${name||''}</span><span class="entry-amount">${fmt(r['金額（税込）'])}</span></div>
       <div class="entry-sub">${r['日付']||''} · ${r['支払方法']||''} · ${sub||''} ${badge}${pdfBtn}</div>
@@ -613,21 +719,21 @@ function renderPdfGallery(type, pdfs) {
 
 // ===== DETAIL MODAL =====
 function showDetail(type, idx) {
-  const r = (type==='ryoshu' ? ryoshuData : shiireData)[idx];
-  const nameKey = type==='ryoshu' ? '店舗・支払先' : '請求元';
+  const r = (type==='ryoshu' ? ryoshuData : type==='cash_ryoshu' ? cashRyoshuData : shiireData)[idx];
+  const nameKey = (type==='ryoshu'||type==='cash_ryoshu') ? '店舗・支払先' : '請求元';
   document.getElementById('modal-title').textContent = r[nameKey]||'詳細';
-  const fields = type==='ryoshu'
+  const fields = (type==='ryoshu'||type==='cash_ryoshu')
     ? [['日付',r['日付']],['内容',r['内容']],['金額（税込）',fmt(r['金額（税込）'])],['支払方法',r['支払方法']],['勘定科目',r['勘定科目（参考）']],['備考',r['備考']],['インボイス番号',r['インボイス番号']||'未入力']]
     : [['日付',r['日付']],['件名',r['件名']],['金額（税込）',fmt(r['金額（税込）'])],['支払方法',r['支払方法']],['勘定科目',r['勘定科目（参考）']],['備考',r['備考']],['インボイス番号',r['インボイス番号']||'なし'],['原紙PDF',r['原紙PDF']||'なし']];
-  const photoBtn = (type==='ryoshu' && r['photo'])
+  const photoBtn = ((type==='ryoshu'||type==='cash_ryoshu') && r['photo'])
     ? `<button onclick="showPhoto('${type}',${idx})" style="width:100%;padding:11px;background:#E6F1FB;color:#185FA5;border:none;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer;margin-bottom:10px;">📷 原紙を見る（写真）</button>`
     : '';
   const pdfViewBtn = r['原紙PDF']
-    ? (type==='ryoshu'
-        ? `<button onclick="openReceiptPDF('${r['原紙PDF'].replace(/'/g,"\\'")}');" style="width:100%;padding:11px;background:#E6F1FB;color:#185FA5;border:none;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer;margin-bottom:10px;">📄 領収書原紙を開く（OneDrive）</button>`
+    ? ((type==='ryoshu'||type==='cash_ryoshu')
+        ? `<button onclick="openReceiptPDF('${r['原紙PDF'].replace(/'/g,"\\'")}',${r['No_']||''});" style="width:100%;padding:11px;background:#E6F1FB;color:#185FA5;border:none;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer;margin-bottom:10px;">📄 領収書原紙を開く</button>`
         : `<button onclick="openInvoicePDF('${r['原紙PDF'].replace(/'/g,"\\'")}');" style="width:100%;padding:11px;background:#E6F1FB;color:#185FA5;border:none;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer;margin-bottom:10px;">📄 請求書原紙を開く（OneDrive）</button>`)
     : '';
-  const invoiceSection = type==='ryoshu'
+  const invoiceSection = (type==='ryoshu'||type==='cash_ryoshu')
     ? `<div style="margin-top:12px;font-size:13px;font-weight:500;color:#52514e;">インボイス番号を入力</div>
    <div class="invoice-field">
      <input type="text" id="inv-input" placeholder="T1234567890123" value="${r['インボイス番号']||''}">
@@ -663,7 +769,7 @@ function showPhoto(type, idx) {
 
 function saveInvoice(type, idx) {
   const val = document.getElementById('inv-input').value.trim();
-  const data = type==='ryoshu' ? ryoshuData : shiireData;
+  const data = type==='ryoshu' ? ryoshuData : type==='cash_ryoshu' ? cashRyoshuData : shiireData;
   data[idx]['インボイス番号'] = val || null;
   saveData(type, data);
   document.getElementById('modal').classList.remove('open');
@@ -673,7 +779,7 @@ function saveInvoice(type, idx) {
 
 function savePDFLink(type, idx) {
   const val = document.getElementById('pdf-input').value.trim();
-  const data = type==='ryoshu' ? ryoshuData : shiireData;
+  const data = type==='ryoshu' ? ryoshuData : type==='cash_ryoshu' ? cashRyoshuData : shiireData;
   data[idx]['原紙PDF'] = val || null;
   saveData(type, data);
   document.getElementById('modal').classList.remove('open');
@@ -693,7 +799,7 @@ async function uploadPDFToStorage(type, idx, input) {
     const url = await ref.getDownloadURL();
     // URLをテキスト欄にセットして保存
     document.getElementById('pdf-input').value = url;
-    const data = type==='ryoshu' ? ryoshuData : shiireData;
+    const data = type==='ryoshu' ? ryoshuData : type==='cash_ryoshu' ? cashRyoshuData : shiireData;
     data[idx]['原紙PDF'] = url;
     saveData(type, data);
     renderList(type);
@@ -720,16 +826,442 @@ const RYOSHU_PDF_BASE = 'https://furuenet-my.sharepoint.com/personal/yk_furuenet
 
 function openInvoicePDF(val) {
   if (!val) return;
-  // Firebase StorageのフルURL or OneDriveファイル名
+  // Firebase StorageのフルURL or ファイル名
   if (val.startsWith('http')) { window.open(val, '_blank'); return; }
+  // shiirePdfsからFirebase Storage URLを検索（配列・オブジェクト両対応）
+  const shiireArr = Array.isArray(shiirePdfs) ? shiirePdfs : Object.values(shiirePdfs || {});
+  const found = shiireArr.find(p => p && p['ファイル名'] === val);
+  if (found && found.url) { window.open(found.url, '_blank'); return; }
   window.open(ONEDRIVE_BASE + encodeURIComponent(val), '_blank');
 }
 
-function openReceiptPDF(val) {
+let _pdfPickerTargetNo = null;
+
+async function openReceiptPDF(val, recordNo) {
   if (!val) return;
-  // Firebase StorageのフルURL or OneDriveファイル名
-  if (val.startsWith('http')) { window.open(val, '_blank'); return; }
-  window.open(RYOSHU_PDF_BASE + encodeURIComponent(val), '_blank');
+  const ryoshuArr = Array.isArray(ryoshuPdfs) ? ryoshuPdfs : Object.values(ryoshuPdfs || {});
+  // フルURL → インラインで表示
+  if (val.startsWith('http')) { showPdfViewer(val, val); return; }
+  // ryoshuPdfsからFirebase Storage URLを検索
+  const found = ryoshuArr.find(p => p && p['ファイル名'] === val);
+  if (found && found.url) { showPdfViewer(found.url, found['ファイル名']); return; }
+
+  // ===== 自動マッチング =====
+  _pdfPickerTargetNo = recordNo || null;
+
+  // 既に他のレコードに使われているPDFを除外
+  const usedSet = new Set(
+    ryoshuData
+      .filter(r => r['原紙PDF'] && r['原紙PDF'] !== val && /\.\w+$/.test(r['原紙PDF']))
+      .map(r => r['原紙PDF'])
+  );
+  const unusedPdfs = ryoshuArr.filter(p => p && p['ファイル名'] && !usedSet.has(p['ファイル名']));
+
+  // 未使用が1件だけ → 自動割り当て
+  if (unusedPdfs.length === 1) {
+    showToast('🔍 自動割り当て中...');
+    await selectReceiptPdf(unusedPdfs[0]['ファイル名'], unusedPdfs[0].url);
+    return;
+  }
+
+  // 日付でマッチング（例：2026/04/10 → "20260410" や "0410" を含むファイル名）
+  const record = ryoshuData.find(r => r['No_'] == recordNo);
+  if (record && record['日付']) {
+    const d = record['日付'].replace(/\//g, '');          // "20260410"
+    const d6 = d.slice(2);                                // "260410"
+    const mmdd = d.slice(4);                              // "0410"
+    const candidates = unusedPdfs.length > 0 ? unusedPdfs : ryoshuArr;
+    const dateMatch = candidates.find(p =>
+      p['ファイル名'] && (
+        p['ファイル名'].includes(d) ||
+        p['ファイル名'].includes(d6) ||
+        p['ファイル名'].startsWith(mmdd)
+      )
+    );
+    if (dateMatch) {
+      showToast('🔍 日付で自動マッチ中...');
+      await selectReceiptPdf(dateMatch['ファイル名'], dateMatch.url);
+      return;
+    }
+  }
+
+  // 絞り込めなかった場合：未使用PDFのみ表示（それも多ければ全件）
+  const displayList = unusedPdfs.length > 0 ? unusedPdfs : ryoshuArr;
+  showPdfPicker(displayList);
+}
+
+function showPdfViewer(url, title) {
+  document.getElementById('pdf-viewer-title').textContent = title || 'PDF';
+  document.getElementById('pdf-frame').src = url;
+  const el = document.getElementById('pdf-viewer-overlay');
+  el.style.display = 'flex';
+}
+
+function closePdfViewer() {
+  document.getElementById('pdf-viewer-overlay').style.display = 'none';
+  document.getElementById('pdf-frame').src = '';
+}
+
+function showPdfPicker(arr) {
+  const list = document.getElementById('pdf-picker-list');
+  if (!arr || arr.length === 0) {
+    list.innerHTML = '<div style="padding:20px;text-align:center;color:#888;">PDFデータがありません</div>';
+  } else {
+    list.innerHTML = arr.map(p => {
+      const fn = p['ファイル名'] || '';
+      const u = p.url || '';
+      const safe = fn.replace(/'/g,"\\'");
+      const safeU = u.replace(/'/g,"\\'");
+      return `<div onclick="selectReceiptPdf('${safe}','${safeU}')" style="display:flex;align-items:center;gap:12px;padding:11px 4px;border-bottom:0.5px solid #f0eeea;cursor:pointer;">
+        <span style="font-size:22px;flex-shrink:0;">📄</span>
+        <span style="font-size:13px;color:#0b0b0b;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${fn}</span>
+        <span style="font-size:11px;color:#185FA5;flex-shrink:0;">開く ›</span>
+      </div>`;
+    }).join('');
+  }
+  document.getElementById('pdf-picker-overlay').style.display = 'flex';
+}
+
+function closePdfPicker() {
+  document.getElementById('pdf-picker-overlay').style.display = 'none';
+}
+
+async function selectReceiptPdf(filename, url) {
+  closePdfPicker();
+  showPdfViewer(url, filename);
+  // Firebase の該当レコードに原紙PDFを保存
+  if (_pdfPickerTargetNo !== null && typeof db !== 'undefined') {
+    try {
+      const snap = await db.ref('furue/credit_ryoshu').once('value');
+      const data = snap.val();
+      if (data) {
+        const keys = Object.keys(data);
+        const key = keys.find(k => data[k] && data[k]['No_'] == _pdfPickerTargetNo);
+        if (key) {
+          await db.ref('furue/credit_ryoshu/' + key + '/原紙PDF').set(filename);
+          showToast('✅ 保存しました: ' + filename);
+          // ローカルデータも更新
+          const idx = ryoshuData.findIndex(r => r['No_'] == _pdfPickerTargetNo);
+          if (idx >= 0) ryoshuData[idx]['原紙PDF'] = filename;
+        }
+      }
+    } catch(e) { showToast('⚠️ 保存エラー: ' + e.message); }
+  }
+}
+
+// ===== ビジュアルマッチングUI =====
+let _vmAllRecs = [];   // 全未割り当てレコード
+let _vmPdfs = [];      // 全PDF
+let _vmPdfIdx = 0;     // 現在のPDF
+let _vmSelNo = null;   // 選択中レコードのNo_
+
+function startVisualMatch() {
+  _vmAllRecs = ryoshuData.filter(r => r['原紙PDF'] && /→A\d+/.test(r['原紙PDF']));
+  if (_vmAllRecs.length === 0) { showToast('全件マッチング済みです'); return; }
+  _vmPdfs = Array.isArray(ryoshuPdfs) ? ryoshuPdfs : Object.values(ryoshuPdfs || {});
+  _vmPdfIdx = 0;
+  _vmSelNo = null;
+  document.getElementById('match-ui').style.display = 'flex';
+  vmRenderRecList();
+  vmShowPdf();
+}
+
+function vmRenderRecList() {
+  const list = document.getElementById('match-rec-list');
+  list.innerHTML = _vmAllRecs.map(r => {
+    const isAssigned = !/→A\d+/.test(r['原紙PDF']);
+    const isSel = r['No_'] === _vmSelNo;
+    const bg = isAssigned ? '#1a3a1a' : (isSel ? '#0a3060' : '#2a2a2a');
+    const border = isSel ? '2px solid #60a5fa' : '1px solid #333';
+    const icon = isAssigned ? '✅' : (isSel ? '▶' : '○');
+    return `<div onclick="vmSelectRec(${r['No_']})" style="background:${bg};border:${border};border-radius:8px;padding:8px 10px;margin-bottom:5px;cursor:pointer;">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <span style="color:${isSel?'#93c5fd':'#ddd'};font-size:13px;font-weight:${isSel?'600':'400'};">${icon} ${r['店舗・支払先']||'不明'}</span>
+        <span style="color:#9ca3af;font-size:12px;">¥${(r['金額（税込）']||0).toLocaleString()}</span>
+      </div>
+      <div style="color:#6b7280;font-size:11px;margin-top:2px;">${r['日付']||''} ${r['内容']||''}</div>
+    </div>`;
+  }).join('');
+}
+
+function vmSelectRec(no) {
+  _vmSelNo = no;
+  vmRenderRecList();
+  const btn = document.getElementById('match-assign-btn');
+  const rec = _vmAllRecs.find(r => r['No_'] === no);
+  if (btn && rec) {
+    btn.disabled = false;
+    btn.style.background = '#22c55e';
+    btn.style.color = '#fff';
+    btn.style.cursor = 'pointer';
+    btn.textContent = `✓ 「${rec['店舗・支払先']}」に割り当て`;
+  }
+}
+
+function vmShowPdf() {
+  const pdf = _vmPdfs[_vmPdfIdx];
+  if (!pdf) return;
+  document.getElementById('match-pdf-label').textContent = `${_vmPdfIdx+1}/${_vmPdfs.length}  ${pdf['ファイル名']}`;
+  document.getElementById('match-pdf-frame').src = pdf.url;
+}
+
+function matchNavPdf(dir) {
+  _vmPdfIdx = (_vmPdfIdx + dir + _vmPdfs.length) % _vmPdfs.length;
+  vmShowPdf();
+}
+
+async function matchAssign() {
+  if (_vmSelNo === null) return;
+  const rec = _vmAllRecs.find(r => r['No_'] === _vmSelNo);
+  const pdf = _vmPdfs[_vmPdfIdx];
+  if (!rec || !pdf) return;
+  try {
+    const snap = await db.ref('furue/credit_ryoshu').once('value');
+    const data = snap.val();
+    if (data) {
+      const key = Object.keys(data).find(k => data[k] && data[k]['No_'] == rec['No_']);
+      if (key) await db.ref(`furue/credit_ryoshu/${key}/原紙PDF`).set(pdf['ファイル名']);
+    }
+    const lr = ryoshuData.find(r => r['No_'] == rec['No_']);
+    if (lr) lr['原紙PDF'] = pdf['ファイル名'];
+    rec['原紙PDF'] = pdf['ファイル名']; // _vmAllRecs も更新
+    _vmSelNo = null;
+    showToast(`✅ ${rec['店舗・支払先']} ← ${pdf['ファイル名']}`);
+    // 全件完了チェック
+    const remaining = _vmAllRecs.filter(r => /→A\d+/.test(r['原紙PDF']));
+    if (remaining.length === 0) {
+      closeVisualMatch();
+      document.getElementById('automatch-banner').style.display = 'none';
+      renderList('ryoshu');
+      alert('🎉 全件の割り当てが完了しました！');
+    } else {
+      vmRenderRecList();
+      const btn = document.getElementById('match-assign-btn');
+      btn.disabled = true; btn.style.background = '#666'; btn.style.color = '#aaa';
+      btn.textContent = '← 上の領収書を選んでください';
+    }
+  } catch(e) { showToast('⚠️ 保存エラー: ' + e.message); }
+}
+
+function closeVisualMatch() {
+  document.getElementById('match-ui').style.display = 'none';
+  document.getElementById('match-pdf-frame').src = '';
+}
+
+async function clearAllInvalidPdfs() {
+  if (!confirm('原紙PDFが「→A2」などの無効な値になっている全件をクリアします。\n原紙ボタンが消えます。よろしいですか？')) return;
+  try {
+    const snap = await db.ref('furue/credit_ryoshu').once('value');
+    const data = snap.val();
+    const updates = {};
+    if (data) {
+      Object.entries(data).forEach(([k, v]) => {
+        if (v && v['原紙PDF'] && /→A\d+/.test(v['原紙PDF'])) {
+          updates[`furue/credit_ryoshu/${k}/原紙PDF`] = '';
+        }
+      });
+    }
+    await db.ref().update(updates);
+    // ローカルも更新
+    ryoshuData.forEach(r => {
+      if (r['原紙PDF'] && /→A\d+/.test(r['原紙PDF'])) r['原紙PDF'] = '';
+    });
+    document.getElementById('automatch-banner').style.display = 'none';
+    renderList('ryoshu');
+    showToast(`✅ ${Object.keys(updates).length}件をクリアしました`);
+  } catch(e) { showToast('⚠️ エラー: ' + e.message); }
+}
+
+// ===== PDF自動OCRマッチング =====
+async function pdfToBase64Image(pdfUrl) {
+  // PDF.jsでPDFの1ページ目を画像に変換
+  if (typeof pdfjsLib === 'undefined') throw new Error('PDF.jsが読み込まれていません');
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  const loadingTask = pdfjsLib.getDocument({url: pdfUrl, withCredentials: false});
+  const pdfDoc = await loadingTask.promise;
+  const page = await pdfDoc.getPage(1);
+  const scale = 1.5;
+  const viewport = page.getViewport({scale});
+  const canvas = document.createElement('canvas');
+  canvas.width = viewport.width;
+  canvas.height = viewport.height;
+  await page.render({canvasContext: canvas.getContext('2d'), viewport}).promise;
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+  return dataUrl.split(',')[1];
+}
+
+async function ocrPdf(pdfUrl, apiKey) {
+  const base64 = await pdfToBase64Image(pdfUrl);
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'content-type': 'application/json',
+      'anthropic-dangerous-direct-browser-access': 'true'
+    },
+    body: JSON.stringify({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 200,
+      messages: [{
+        role: 'user',
+        content: [{
+          type: 'image',
+          source: {type: 'base64', media_type: 'image/jpeg', data: base64}
+        }, {
+          type: 'text',
+          text: 'この領収書から店舗名・日付・金額（税込）を抽出。JSON形式のみ返答: {"store":"店舗名","date":"YYYY/MM/DD","amount":金額数字}'
+        }]
+      }]
+    })
+  });
+  const data = await res.json();
+  if (data.error) throw new Error(data.error.message);
+  const text = data.content?.[0]?.text?.trim() || '';
+  const jsonStr = text.match(/\{[^{}]+\}/)?.[0];
+  return jsonStr ? JSON.parse(jsonStr) : null;
+}
+
+function scorePdfMatch(pdfInfo, record) {
+  // 類似度スコア（高いほど一致）
+  let score = 0;
+  if (pdfInfo.amount && record['金額（税込）']) {
+    if (Math.abs(parseInt(pdfInfo.amount) - parseInt(record['金額（税込）'])) < 5) score += 50;
+    else if (Math.abs(parseInt(pdfInfo.amount) - parseInt(record['金額（税込）'])) < 100) score += 20;
+  }
+  if (pdfInfo.store && record['店舗・支払先']) {
+    const ps = pdfInfo.store.replace(/\s/g,'').toLowerCase();
+    const rs = record['店舗・支払先'].replace(/\s/g,'').toLowerCase();
+    if (ps === rs) score += 40;
+    else if (ps.includes(rs) || rs.includes(ps)) score += 25;
+    else {
+      // 部分一致チェック
+      const words = rs.split(/[・\s]/);
+      if (words.some(w => w.length > 1 && ps.includes(w.toLowerCase()))) score += 10;
+    }
+  }
+  if (pdfInfo.date && record['日付']) {
+    if (pdfInfo.date === record['日付']) score += 20;
+  }
+  return score;
+}
+
+async function autoMatchPdfs() {
+  const inputEl = document.getElementById('automatch-api-key');
+  const inputKey = inputEl ? inputEl.value.trim() : '';
+  const apiKey = inputKey || localStorage.getItem('furue_api_key');
+  if (!apiKey) {
+    alert('APIキーを入力してください（sk-ant-... で始まるキー）');
+    return;
+  }
+  if (inputKey) localStorage.setItem('furue_api_key', inputKey);
+  const unmatchedRecords = ryoshuData.filter(r => r['原紙PDF'] && /→A\d+/.test(r['原紙PDF']));
+  if (unmatchedRecords.length === 0) { showToast('全件マッチング済みです'); return; }
+
+  if (!confirm(`${unmatchedRecords.length}件の領収書PDFをOCRで自動マッチングします。\n（Claude APIを使用、少し時間がかかります）\nよろしいですか？`)) return;
+
+  const pdfs = (Array.isArray(ryoshuPdfs) ? ryoshuPdfs : Object.values(ryoshuPdfs || {})).filter(Boolean);
+  const assigned = {}; // pdfFilename -> recordNo
+  const recordAssigned = {}; // recordNo -> pdfFilename
+  let processed = 0;
+
+  // プログレス表示エリア
+  const banner = document.getElementById('automatch-banner');
+  banner.innerHTML = '<div id="match-progress" style="font-size:13px;color:#333;">🔍 解析中...</div>';
+
+  // まずAPIキーテスト
+  const prog = document.getElementById('match-progress');
+  if (prog) prog.textContent = '🔑 APIキー確認中...';
+  try {
+    const testRes = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({model:'claude-haiku-4-5-20251001',max_tokens:5,messages:[{role:'user',content:'hi'}]})
+    });
+    const testData = await testRes.json();
+    if (testData.error) throw new Error('APIキーエラー: ' + testData.error.message);
+    if (prog) prog.textContent = '✅ APIキーOK。PDFフェッチ確認中...';
+  } catch(e) {
+    banner.innerHTML = `<div style="color:#c00;font-size:13px;">❌ ${e.message}<br><br>Consoleで正しいAPIキーをコピーして入力し直してください。</div>`;
+    return;
+  }
+
+  // PDFフェッチテスト（CORS確認）
+  try {
+    const testPdf = pdfs[0];
+    if (prog) prog.textContent = `📄 PDFアクセス確認中: ${testPdf['ファイル名']}`;
+    const testFetch = await fetch(testPdf.url, {mode:'cors'});
+    if (!testFetch.ok) throw new Error(`PDF取得失敗 (HTTP ${testFetch.status})`);
+    if (prog) prog.textContent = '✅ PDFアクセスOK。OCR処理開始...';
+  } catch(e) {
+    banner.innerHTML = `<div style="color:#c00;font-size:13px;">❌ PDFの読み込みに失敗しました: ${e.message}<br>Firebase StorageのCORS設定が必要です。</div>`;
+    return;
+  }
+
+  for (const pdf of pdfs) {
+    if (Object.keys(recordAssigned).length >= unmatchedRecords.length) break;
+    if (prog) prog.textContent = `🔍 OCR解析中 ${++processed}/${pdfs.length}: ${pdf['ファイル名']}`;
+
+    try {
+      const info = await ocrPdf(pdf.url, apiKey);
+      if (!info) continue;
+
+      // 未マッチのレコードと照合
+      let bestScore = 20;
+      let bestRecord = null;
+      for (const r of unmatchedRecords) {
+        if (recordAssigned[r['No_']]) continue;
+        const s = scorePdfMatch(info, r);
+        if (s > bestScore) { bestScore = s; bestRecord = r; }
+      }
+
+      if (bestRecord) {
+        assigned[pdf['ファイル名']] = bestRecord['No_'];
+        recordAssigned[bestRecord['No_']] = pdf['ファイル名'];
+        if (prog) prog.textContent = `✅ ${bestRecord['店舗・支払先']} ← ${pdf['ファイル名']} (${bestScore}点)`;
+        await new Promise(r => setTimeout(r, 200));
+      }
+    } catch(e) {
+      if (prog) prog.textContent = `⚠️ ${pdf['ファイル名']}: ${e.message}`;
+      await new Promise(r => setTimeout(r, 500));
+    }
+  }
+
+  // Firebaseに一括保存
+  if (Object.keys(recordAssigned).length === 0) {
+    banner.innerHTML = '<div style="color:#c00;font-size:13px;">マッチングできませんでした。APIキーを確認してください。</div>';
+    return;
+  }
+
+  try {
+    const snap = await db.ref('furue/credit_ryoshu').once('value');
+    const fbData = snap.val();
+    const updates = {};
+    if (fbData) {
+      Object.entries(fbData).forEach(([k, v]) => {
+        if (v && recordAssigned[v['No_']]) {
+          updates[`furue/credit_ryoshu/${k}/原紙PDF`] = recordAssigned[v['No_']];
+        }
+      });
+    }
+    await db.ref().update(updates);
+
+    // ローカルデータも更新
+    ryoshuData.forEach(r => {
+      if (recordAssigned[r['No_']]) r['原紙PDF'] = recordAssigned[r['No_']];
+    });
+
+    const n = Object.keys(recordAssigned).length;
+    banner.innerHTML = `<div style="color:#155724;font-size:13px;">✅ ${n}件のPDFを自動割り当てしました！ページをリロードしてご確認ください。</div>`;
+    renderList('ryoshu');
+  } catch(e) {
+    banner.innerHTML = `<div style="color:#c00;font-size:13px;">保存エラー: ${e.message}</div>`;
+  }
 }
 
 // ===== FIREBASE MIGRATION (T番号・原紙PDFを既存データに適用) =====
@@ -816,7 +1348,7 @@ async function addRyoshu26Records() {
   });
   if (added === 0) { showToast('追加対象なし（すでに全件存在します）'); return; }
   try {
-    await db.ref('furue/ryoshu').set(sanitizeForFb(ryoshuData.map(r=>{const c={...r};delete c.photo;return c;})));
+    await db.ref('furue/credit_ryoshu').set(sanitizeForFb(ryoshuData.map(r=>{const c={...r};delete c.photo;return c;})));
   } catch(e) {}
   saveData('ryoshu', ryoshuData);
   renderList('ryoshu');
@@ -835,13 +1367,20 @@ document.getElementById('f-type').addEventListener('change', function() {
 document.getElementById('f-date').value = new Date().toISOString().split('T')[0];
 
 function addEntry() {
-  const type = document.getElementById('f-type').value;
+  let type = document.getElementById('f-type').value;
   const date = document.getElementById('f-date').value;
   const amount = document.getElementById('f-amount').value;
+  const payment = document.getElementById('f-payment').value;
   if (!date || !amount) { showToast('日付と金額は必須です'); return; }
 
+  // 領収書は支払方法で自動振り分け
+  if (type === 'ryoshu') {
+    type = detectRyoshuType(payment);
+  }
+
   const isShiire = type === 'shiire';
-  const data = isShiire ? shiireData : ryoshuData;
+  const isCashRyoshu = type === 'cash_ryoshu';
+  const data = isShiire ? shiireData : isCashRyoshu ? cashRyoshuData : ryoshuData;
   const newNo = (data.length > 0 ? Math.max(...data.map(r=>Number(r['No.'])||0)) : 0) + 1;
 
   const entry = {
@@ -861,7 +1400,7 @@ function addEntry() {
     entry['内容'] = document.getElementById('f-content').value;
   }
   // 写真があれば原紙として保存（ローカルのみ）
-  if (!isShiire && currentPhotoBase64) {
+  if (!isShiire && !isCashRyoshu && currentPhotoBase64) {
     entry['photo'] = currentPhotoBase64;
     saveLocalPhoto(newNo, currentPhotoBase64);
     currentPhotoBase64 = null;
@@ -871,19 +1410,20 @@ function addEntry() {
 
   data.push(entry);
   saveData(type, data);
-  showToast('登録しました！');
+  const destLabel = type === 'cash_ryoshu' ? '現金領収書' : type === 'shiire' ? '仕入請求書' : 'クレジット領収書';
+  showToast(`登録しました！→ ${destLabel}`);
   document.getElementById('f-amount').value='';
   document.getElementById('f-name').value='';
   document.getElementById('f-content').value='';
   document.getElementById('f-invoice').value='';
   document.getElementById('f-memo').value='';
-  showPage(type==='ryoshu'?'ryoshu':'shiire');
+  showPage(type==='shiire'?'shiire':type==='cash_ryoshu'?'cash_ryoshu':'ryoshu');
 }
 
 // ===== EXPORT CSV =====
 function exportCSV(type) {
-  const data = type==='ryoshu' ? ryoshuData : shiireData;
-  const headers = type==='ryoshu'
+  const data = type==='ryoshu' ? ryoshuData : type==='cash_ryoshu' ? cashRyoshuData : shiireData;
+  const headers = (type==='ryoshu'||type==='cash_ryoshu')
     ? ['No.','日付','店舗・支払先','内容','金額（税込）','支払方法','勘定科目（参考）','備考','インボイス番号','添付PDF']
     : ['No.','日付','請求元','件名','金額（税込）','支払方法','勘定科目（参考）','備考','原紙PDF'];
   const rows = [headers, ...data.map(r => headers.map(h => r[h]??''))];
@@ -981,8 +1521,10 @@ async function runOCR() {
 function exportTaxReport() {
   const today = new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'});
   const rRows = ryoshuData.filter(r => typeof r['No.'] === 'number');
+  const crRows = cashRyoshuData.filter(r => typeof r['No.'] === 'number');
   const sRows = shiireData.filter(r => typeof r['No.'] === 'number');
   const rTotal = rRows.reduce((s,r)=>s+(Number(r['金額（税込）'])||0),0);
+  const crTotal = crRows.reduce((s,r)=>s+(Number(r['金額（税込）'])||0),0);
   const sTotal = sRows.reduce((s,r)=>s+(Number(r['金額（税込）'])||0),0);
   const makeRows = (rows, cols) => rows.map(r => `<tr>${cols.map(k=>`<td${k.startsWith('金額')?` class="amount"`:''}>` + (k.startsWith('金額') ? '¥'+(r[k]||0).toLocaleString() : (r[k]||'')) + `</td>`).join('')}</tr>`).join('');
   const html = `<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>㈲フルエ 会計資料 ${today}</title><style>
@@ -1015,13 +1557,19 @@ tr:nth-child(even) td{background:#f8f8f8}
 <h1>㈲有限会社フルエ　会計資料</h1>
 <div class="sub">2026年度（2026年4月〜）　作成日：${today}　※税理士確認用</div>
 <div class="kpis">
-  <div class="kpi"><div class="kpi-label">領収書 合計</div><div class="kpi-value">¥${rTotal.toLocaleString()}</div><div class="kpi-sub">${rRows.length}件</div></div>
+  <div class="kpi"><div class="kpi-label">クレジット領収書 合計</div><div class="kpi-value">¥${rTotal.toLocaleString()}</div><div class="kpi-sub">${rRows.length}件</div></div>
+  <div class="kpi"><div class="kpi-label">現金領収書 合計</div><div class="kpi-value">¥${crTotal.toLocaleString()}</div><div class="kpi-sub">${crRows.length}件</div></div>
   <div class="kpi"><div class="kpi-label">仕入請求書 合計</div><div class="kpi-value">¥${sTotal.toLocaleString()}</div><div class="kpi-sub">${sRows.length}件</div></div>
 </div>
-<h2>領収書一覧</h2>
+<h2>クレジット領収書一覧</h2>
 <table><tr><th>No.</th><th>日付</th><th>店舗・支払先</th><th>内容</th><th style="text-align:right">金額（税込）</th><th>支払方法</th><th>勘定科目（参考）</th><th>インボイス番号</th><th>備考</th></tr>
 ${makeRows(rRows, ['No.','日付','店舗・支払先','内容','金額（税込）','支払方法','勘定科目（参考）','インボイス番号','備考'])}
 <tr class="total-row"><td colspan="4">合　計</td><td class="amount">¥${rTotal.toLocaleString()}</td><td colspan="4"></td></tr></table>
+<div class="note">※勘定科目は参考分類です。税理士にご確認の上、修正してください。</div>
+<h2>現金領収書一覧</h2>
+<table><tr><th>No.</th><th>日付</th><th>店舗・支払先</th><th>内容</th><th style="text-align:right">金額（税込）</th><th>支払方法</th><th>勘定科目（参考）</th><th>インボイス番号</th><th>備考</th></tr>
+${makeRows(crRows, ['No.','日付','店舗・支払先','内容','金額（税込）','支払方法','勘定科目（参考）','インボイス番号','備考'])}
+<tr class="total-row"><td colspan="4">合　計</td><td class="amount">¥${crTotal.toLocaleString()}</td><td colspan="4"></td></tr></table>
 <div class="note">※勘定科目は参考分類です。税理士にご確認の上、修正してください。</div>
 <h2>仕入請求書一覧</h2>
 <table><tr><th>No.</th><th>日付</th><th>請求元</th><th>件名</th><th style="text-align:right">金額（税込）</th><th>支払方法</th><th>勘定科目（参考）</th><th>インボイス番号</th><th>備考</th></tr>
@@ -1562,7 +2110,7 @@ function renderCreditPage() {
     const label = `${y}年${mo}月`;
     // 明細行
     const rowsHtml = m.rows.map(r => {
-      const pdfFn = r['原紙PDF'] ? `<button onclick="event.stopPropagation();openReceiptPDF('${r['原紙PDF'].replace(/'/g,"\\'")}');" style="font-size:11px;padding:2px 7px;background:#E6F1FB;color:#185FA5;border:none;border-radius:5px;cursor:pointer">📄</button>` : '';
+      const pdfFn = r['原紙PDF'] ? `<button onclick="event.stopPropagation();openReceiptPDF('${r['原紙PDF'].replace(/'/g,"\\'")}',${r['No_']||''});" style="font-size:11px;padding:2px 7px;background:#E6F1FB;color:#185FA5;border:none;border-radius:5px;cursor:pointer">📄</button>` : '';
       return `<tr style="border-bottom:1px solid #f0eeea">
         <td style="padding:5px 4px;font-size:12px;color:#52514e">${r['日付']||''}</td>
         <td style="padding:5px 4px;font-size:12px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r['店舗・支払先']||r['件名']||''}</td>
@@ -1720,6 +2268,7 @@ function importCreditCSV(input) {
   reader.readAsText(file, 'Shift_JIS');
   input.value = '';
 }
+
 </script>
 
 <div id="page-kyuyo" class="page">

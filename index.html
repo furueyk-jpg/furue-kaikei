@@ -107,7 +107,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;ba
 </div>
 
 <div class="tabs">
-  <button class="tab active" onclick="showPage('ryoshu')">クレジット領収書</button>
+  <button class="tab" onclick="showPage('ryoshu')" style="display:none">クレジット領収書</button>
   <button class="tab" onclick="showPage('cash_ryoshu')">現金領収書</button>
   <button class="tab" onclick="showPage('shiire')">仕入請求書</button>
   <button class="tab" onclick="showPage('nyuryoku')">新規入力</button>
@@ -1439,7 +1439,7 @@ function addEntry() {
   document.getElementById('f-content').value='';
   document.getElementById('f-invoice').value='';
   document.getElementById('f-memo').value='';
-  showPage(type==='shiire'?'shiire':type==='cash_ryoshu'?'cash_ryoshu':'ryoshu');
+  showPage(type==='shiire'?'shiire':type==='cash_ryoshu'?'cash_ryoshu':'credit');
 }
 
 // ===== EXPORT CSV =====
@@ -1632,7 +1632,7 @@ function importJSON() {
         if (d.ryoshu) { ryoshuData = d.ryoshu; saveData('ryoshu', ryoshuData); }
         if (d.shiire) { shiireData = d.shiire; saveData('shiire', shiireData); }
         showToast('データを復元しました (' + (d.exported||'').slice(0,10) + ')');
-        showPage('ryoshu');
+        showPage('credit');
       } catch { showToast('ファイルの読み込みに失敗しました'); }
     };
     reader.readAsText(file);
@@ -1654,7 +1654,7 @@ function showToast(msg) {
   loadingEl.style.cssText = 'position:fixed;inset:0;background:#f5f5f0;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:500;gap:12px';
   loadingEl.innerHTML = '<div style="width:36px;height:36px;border:3px solid #e0e0e0;border-top-color:#185FA5;border-radius:50%;animation:spin 0.8s linear infinite"></div><div style="font-size:14px;color:#52514e">データを読み込み中...</div><style>@keyframes spin{to{transform:rotate(360deg)}}</style>';
   document.body.appendChild(loadingEl);
-  loadAllData().then(() => { loadingEl.remove(); renderList('ryoshu'); });
+  loadAllData().then(() => { loadingEl.remove(); showPage('credit'); });
 })();
 
 // ===== 給与・勤務表 =====
@@ -2088,8 +2088,17 @@ function saveUriageCheck(idx, field, val) {
 let creditData = {}; // { 'YYYY-MM': [ {date, content, amount, ...} ] }
 
 function renderCreditPage() {
-  // ---- 1. ryoshuData からクレジット払い集計 ----
-  const creditKeywords = ['クレジット','JCB','AMEX','Mastercard','VISA','VISA','信販','カード'];
+  // ---- 0. レシート照合テーブルを構築（日付+金額でマッチング）----
+  const receiptLookup = {}; // "YYYY/MM/DD_AMOUNT" → [{r, idx}, ...]
+  (ryoshuData || []).forEach((r, idx) => {
+    if (!r['日付'] || !r['金額（税込）']) return;
+    const key = `${r['日付']}_${r['金額（税込）']}`;
+    if (!receiptLookup[key]) receiptLookup[key] = [];
+    receiptLookup[key].push({r, idx});
+  });
+
+  // ---- 1. ryoshuData からクレジット払い集計（QUICPayも含む）----
+  const creditKeywords = ['クレジット','JCB','AMEX','Mastercard','VISA','信販','カード','QUICPay','QuicPay','Apple Pay','iD','Suica'];
   const byMonth = {};
   (ryoshuData || []).forEach(r => {
     if (!r['日付']) return;
@@ -2130,24 +2139,48 @@ function renderCreditPage() {
     const m = byMonth[ym];
     const [y,mo] = ym.split('-');
     const label = `${y}年${mo}月`;
-    // 明細行
+    // 明細行（領収書スキャン）
     const rowsHtml = m.rows.map(r => {
-      const pdfFn = r['原紙PDF'] ? `<button onclick="event.stopPropagation();openReceiptPDF('${r['原紙PDF'].replace(/'/g,"\\'")}',${r['No_']||''});" style="font-size:11px;padding:2px 7px;background:#E6F1FB;color:#185FA5;border:none;border-radius:5px;cursor:pointer">📄</button>` : '';
+      const rIdx = ryoshuData.indexOf(r);
+      const photoBtn = r.photo
+        ? `<button onclick="event.stopPropagation();showPhoto('ryoshu',${rIdx})" style="font-size:11px;padding:2px 7px;background:#d7f3e8;color:#1a7a4a;border:none;border-radius:5px;cursor:pointer;margin-right:2px" title="レシート写真を見る">📷</button>`
+        : '';
+      const pdfBtn = r['原紙PDF']
+        ? `<button onclick="event.stopPropagation();openReceiptPDF('${r['原紙PDF'].replace(/'/g,"\\'")}',${r['No_']||r['No.']||''});" style="font-size:11px;padding:2px 7px;background:#E6F1FB;color:#185FA5;border:none;border-radius:5px;cursor:pointer" title="PDF">📄</button>`
+        : '';
+      const noBtn = (!r.photo && !r['原紙PDF']) ? `<span style="color:#ccc;font-size:10px">-</span>` : '';
       return `<tr style="border-bottom:1px solid #f0eeea">
         <td style="padding:5px 4px;font-size:12px;color:#52514e">${r['日付']||''}</td>
         <td style="padding:5px 4px;font-size:12px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r['店舗・支払先']||r['件名']||''}</td>
         <td style="padding:5px 4px;font-size:12px;text-align:right;color:#185FA5;font-weight:600">¥${(Number(r['金額（税込）'])||0).toLocaleString()}</td>
-        <td style="padding:5px 4px;font-size:12px;text-align:center">${pdfFn}</td>
+        <td style="padding:5px 4px;font-size:12px;text-align:center">${photoBtn}${pdfBtn}${noBtn}</td>
       </tr>`;
     }).join('');
 
-    // CSV取り込み済みデータ
-    const csvRows = (creditData[ym] || []).map(c => `<tr style="border-bottom:1px solid #f0eeea;background:#FFFDE7">
-      <td style="padding:5px 4px;font-size:12px;color:#52514e">${c.date||''}</td>
-      <td style="padding:5px 4px;font-size:12px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.content||''}</td>
-      <td style="padding:5px 4px;font-size:12px;text-align:right;color:#333;font-weight:600">¥${(Number(c.amount)||0).toLocaleString()}</td>
-      <td style="padding:5px 4px;font-size:12px;text-align:center;color:#888">明細</td>
-    </tr>`).join('');
+    // CSV取り込み済みデータ（クレジット明細）— レシートを日付+金額でマッチング
+    const csvRows = (creditData[ym] || []).map(c => {
+      const dateNorm = (c.date||'').replace(/-/g,'/');
+      const key = `${dateNorm}_${c.amount}`;
+      const matches = receiptLookup[key] || [];
+      let receiptBtns = '';
+      if (matches.length === 1) {
+        const {r: mr, idx: mIdx} = matches[0];
+        if (mr.photo) {
+          receiptBtns = `<button onclick="event.stopPropagation();showPhoto('ryoshu',${mIdx})" style="font-size:11px;padding:2px 7px;background:#d7f3e8;color:#1a7a4a;border:none;border-radius:5px;cursor:pointer" title="レシートを見る">📷 レシート</button>`;
+        } else if (mr['原紙PDF']) {
+          receiptBtns = `<button onclick="event.stopPropagation();openReceiptPDF('${mr['原紙PDF'].replace(/'/g,"\\'")}',${mr['No_']||mr['No.']||''});" style="font-size:11px;padding:2px 7px;background:#E6F1FB;color:#185FA5;border:none;border-radius:5px;cursor:pointer" title="レシートを見る">📄 レシート</button>`;
+        }
+      } else if (matches.length > 1) {
+        const firstWithPhoto = matches.find(m=>m.r.photo) || matches[0];
+        receiptBtns = `<button onclick="event.stopPropagation();showPhoto('ryoshu',${firstWithPhoto.idx})" style="font-size:11px;padding:2px 7px;background:#d7f3e8;color:#1a7a4a;border:none;border-radius:5px;cursor:pointer" title="${matches.length}件一致">📷×${matches.length}</button>`;
+      }
+      return `<tr style="border-bottom:1px solid #f0eeea;background:#FFFDE7">
+        <td style="padding:5px 4px;font-size:12px;color:#52514e">${c.date||''}</td>
+        <td style="padding:5px 4px;font-size:12px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.content||''}</td>
+        <td style="padding:5px 4px;font-size:12px;text-align:right;color:#333;font-weight:600">¥${(Number(c.amount)||0).toLocaleString()}</td>
+        <td style="padding:5px 4px;font-size:12px;text-align:center">${receiptBtns || '<span style="color:#ccc;font-size:10px">-</span>'}</td>
+      </tr>`;
+    }).join('');
 
     const csvTotal = (creditData[ym]||[]).reduce((s,c)=>s+(Number(c.amount)||0),0);
 
@@ -2180,12 +2213,26 @@ function renderCreditPage() {
     const [y,mo] = ym.split('-');
     const label = `${y}年${mo}月`;
     const total = rows.reduce((s,c)=>s+(Number(c.amount)||0),0);
-    const rowsHtml = rows.map(c=>`<tr style="border-bottom:1px solid #f0eeea;background:#FFFDE7">
-      <td style="padding:5px 4px;font-size:12px;color:#52514e">${c.date||''}</td>
-      <td style="padding:5px 4px;font-size:12px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.content||''}</td>
-      <td style="padding:5px 4px;font-size:12px;text-align:right;color:#333;font-weight:600">¥${(Number(c.amount)||0).toLocaleString()}</td>
-      <td style="padding:5px 4px;font-size:12px;text-align:center;color:#888">明細</td>
-    </tr>`).join('');
+    const rowsHtml = rows.map(c=>{
+      const dateNorm = (c.date||'').replace(/-/g,'/');
+      const key = `${dateNorm}_${c.amount}`;
+      const matches = receiptLookup[key] || [];
+      let receiptBtns = '';
+      if (matches.length >= 1) {
+        const {r: mr, idx: mIdx} = matches.find(m=>m.r.photo) ? matches.find(m=>m.r.photo) : matches[0];
+        if (mr.photo) {
+          receiptBtns = `<button onclick="event.stopPropagation();showPhoto('ryoshu',${mIdx})" style="font-size:11px;padding:2px 7px;background:#d7f3e8;color:#1a7a4a;border:none;border-radius:5px;cursor:pointer">📷 レシート</button>`;
+        } else if (mr['原紙PDF']) {
+          receiptBtns = `<button onclick="event.stopPropagation();openReceiptPDF('${mr['原紙PDF'].replace(/'/g,"\\'")}',${mr['No_']||mr['No.']||''});" style="font-size:11px;padding:2px 7px;background:#E6F1FB;color:#185FA5;border:none;border-radius:5px;cursor:pointer">📄 レシート</button>`;
+        }
+      }
+      return `<tr style="border-bottom:1px solid #f0eeea;background:#FFFDE7">
+        <td style="padding:5px 4px;font-size:12px;color:#52514e">${c.date||''}</td>
+        <td style="padding:5px 4px;font-size:12px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.content||''}</td>
+        <td style="padding:5px 4px;font-size:12px;text-align:right;color:#333;font-weight:600">¥${(Number(c.amount)||0).toLocaleString()}</td>
+        <td style="padding:5px 4px;font-size:12px;text-align:center">${receiptBtns || '<span style="color:#ccc;font-size:10px">-</span>'}</td>
+      </tr>`;
+    }).join('');
     html += `<div class="form-card" style="padding:0;margin-bottom:10px;overflow:hidden">
       <div style="background:#FFFDE7;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleCreditMonth('${ym}')">
         <span style="font-weight:600;font-size:14px;color:#7c6e00">📅 ${label}（明細のみ）</span>
@@ -2601,10 +2648,10 @@ async function importMonotaroData() {
     saveData('ryoshu', ryoshuData);
   }
 
-  showToast(`✅ ${newItems.length}件をクレジット領収書に追加しました`);
+  showToast(`✅ ${newItems.length}件をクレジットに追加しました`);
   document.getElementById('monotaro-preview').style.display = 'none';
   _monotaroData = [];
-  showPage('ryoshu');
+  showPage('credit');
 }
 </script>
 </body>

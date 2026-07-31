@@ -858,6 +858,7 @@ function editEntry(type, idx) {
     ${fld('金額（税込）','edit-amount',r['金額（税込）'],'number')}
     ${fld('支払方法','edit-payment',r['支払方法'])}
     <div style="margin-bottom:12px"><label style="font-size:12px;color:#898781;font-weight:500;display:block;margin-bottom:5px">勘定科目</label><select id="edit-kanjou" style="width:100%;padding:10px 12px;border:0.5px solid #ccc;border-radius:8px;font-size:15px;color:#0b0b0b;background:#fff;-webkit-appearance:none">${kanjouOpts}</select></div>
+    ${fld('インボイス番号（T+13桁）','edit-invoice',r['インボイス番号'])}
     ${fld('備考','edit-memo',r['備考'])}
     <button onclick="saveEdit('${type}',${idx})" style="width:100%;padding:14px;background:#185FA5;color:#fff;border:none;border-radius:10px;font-size:16px;font-weight:600;cursor:pointer;margin-bottom:10px">保存する</button>
     <button onclick="deleteEntry('${type}',${idx})" style="width:100%;padding:12px;background:#fff;color:#d32f2f;border:1px solid #d32f2f;border-radius:10px;font-size:14px;cursor:pointer">🗑 削除する</button>
@@ -877,6 +878,7 @@ function saveEdit(type, idx) {
   r['金額（税込）'] = Number(document.getElementById('edit-amount').value) || 0;
   r['支払方法'] = document.getElementById('edit-payment').value;
   r['勘定科目（参考）'] = document.getElementById('edit-kanjou').value;
+  r['インボイス番号'] = document.getElementById('edit-invoice').value.trim() || null;
   r['備考'] = document.getElementById('edit-memo').value || null;
   if (isRyoshu && newType !== type) {
     data.splice(idx, 1);
@@ -886,10 +888,12 @@ function saveEdit(type, idx) {
     saveData(newType, dest);
     renderList(type);
     renderList(newType);
+    if (document.getElementById('page-credit').classList.contains('active')) renderCreditPage();
     showToast((newType==='ryoshu' ? 'クレジット' : '現金') + '領収書に振り替えました');
   } else {
     saveData(type, data);
     renderList(type);
+    if (document.getElementById('page-credit').classList.contains('active')) renderCreditPage();
     showToast('保存しました');
   }
   document.getElementById('modal').classList.remove('open');
@@ -901,6 +905,7 @@ function deleteEntry(type, idx) {
   data.splice(idx, 1);
   saveData(type, data);
   renderList(type);
+  if (document.getElementById('page-credit').classList.contains('active')) renderCreditPage();
   document.getElementById('modal').classList.remove('open');
   showToast('削除しました');
 }
@@ -2257,7 +2262,7 @@ function renderCreditPage() {
         ? `<button onclick="event.stopPropagation();openReceiptPDF('${r['原紙PDF'].replace(/'/g,"\\'")}',${r['No_']||r['No.']||''});" style="font-size:11px;padding:2px 7px;background:#E6F1FB;color:#185FA5;border:none;border-radius:5px;cursor:pointer" title="PDF">📄</button>`
         : '';
       const noBtn = (!r.photo && !r['原紙PDF']) ? `<span style="color:#ccc;font-size:10px">-</span>` : '';
-      return `<tr style="border-bottom:1px solid #f0eeea">
+      return `<tr style="border-bottom:1px solid #f0eeea;cursor:pointer" onclick="showDetail('ryoshu',${rIdx})">
         <td style="padding:5px 4px;font-size:12px;color:#52514e">${r['日付']||''}</td>
         <td style="padding:5px 4px;font-size:12px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r['店舗・支払先']||r['件名']||''}</td>
         <td style="padding:5px 4px;font-size:12px;text-align:right;color:#185FA5;font-weight:600">¥${(Number(r['金額（税込）'])||0).toLocaleString()}</td>

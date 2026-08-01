@@ -235,9 +235,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;ba
       <div class="form-row">
         <label>支払方法</label>
         <select id="f-payment">
-          <option>クレジット</option><option>QUICPay</option>
-          <option>振込</option><option>現金</option>
-          <option>AMEX</option><option>MasterCard</option><option>不明</option>
+          <option value="クレジット">クレジット</option>
+          <option value="現金">現金</option>
+          <option value="他">他</option>
         </select>
       </div>
     </div>
@@ -856,7 +856,7 @@ function editEntry(type, idx) {
     ${fld(nameKey,'edit-name',r[nameKey])}
     ${fld(contentKey,'edit-content',r[contentKey])}
     ${fld('金額（税込）','edit-amount',r['金額（税込）'],'number')}
-    ${fld('支払方法','edit-payment',r['支払方法'])}
+    <div style="margin-bottom:12px"><label style="font-size:12px;color:#898781;font-weight:500;display:block;margin-bottom:5px">支払方法</label><select id="edit-payment" style="width:100%;padding:10px 12px;border:0.5px solid #ccc;border-radius:8px;font-size:15px;color:#0b0b0b;background:#fff;-webkit-appearance:none"><option value="クレジット" ${ (r['支払方法']||'').includes('クレジット')||['JCB','AMEX','VISA','Mastercard','QUICPay','iD','Suica','ApplePay'].some(k=>(r['支払方法']||'').includes(k)) ?'selected':''}>クレジット</option><option value="現金" ${(r['支払方法']||'').includes('現金')?'selected':''}>現金</option><option value="他" ${ !(r['支払方法']||'').includes('クレジット')&&!['JCB','AMEX','VISA','Mastercard','QUICPay','iD','Suica','ApplePay'].some(k=>(r['支払方法']||'').includes(k))&&!(r['支払方法']||'').includes('現金')?'selected':''}>他</option></select></div>
     <div style="margin-bottom:12px"><label style="font-size:12px;color:#898781;font-weight:500;display:block;margin-bottom:5px">勘定科目</label><select id="edit-kanjou" style="width:100%;padding:10px 12px;border:0.5px solid #ccc;border-radius:8px;font-size:15px;color:#0b0b0b;background:#fff;-webkit-appearance:none">${kanjouOpts}</select></div>
     ${fld('インボイス番号（T+13桁）','edit-invoice',r['インボイス番号'])}
     ${fld('備考','edit-memo',r['備考'])}

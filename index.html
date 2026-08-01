@@ -66,6 +66,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue','Hiragino San
 /* ── ENTRY CARD ── */
 .entry{background:var(--card);border-radius:16px;padding:15px 16px;margin-bottom:10px;border:1px solid var(--border);box-shadow:var(--shadow-sm);cursor:pointer;transition:transform .15s,box-shadow .15s;}
 .entry:active{transform:scale(0.986);box-shadow:none;}
+.entry.selected{border-color:#e53935;background:#FFF5F5;}
+.select-bar{display:none;position:sticky;top:0;z-index:10;background:#e53935;color:#fff;padding:10px 16px;border-radius:12px;margin-bottom:10px;align-items:center;justify-content:space-between;gap:10px;}
+.select-bar.active{display:flex;}
 .entry-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:4px;}
 .entry-name{font-size:16px;font-weight:600;color:var(--text);flex:1;line-height:1.3;}
 .entry-amount{font-size:17px;font-weight:700;color:var(--primary-2);white-space:nowrap;}
@@ -165,6 +168,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue','Hiragino San
       <svg width="16" height="16" fill="none" stroke="#898781" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
       <input type="search" id="search-ryoshu" placeholder="店舗名・内容で検索" oninput="filterList('ryoshu')">
     </div>
+    <button onclick="toggleSelectMode('ryoshu')" id="sel-btn-ryoshu" style="background:#fff;color:#e53935;border:1.5px solid #e53935;border-radius:8px;padding:6px 12px;font-size:13px;cursor:pointer;white-space:nowrap;height:38px">選択</button>
     <select id="ryoshu-month-filter" onchange="renderList('ryoshu')" style="border:1px solid #ccc;border-radius:8px;padding:6px 10px;font-size:13px;background:#fff;height:38px">
       <option value="">全月</option>
     </select>
@@ -188,6 +192,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue','Hiragino San
       <svg width="16" height="16" fill="none" stroke="#898781" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
       <input type="search" id="search-cash_ryoshu" placeholder="店舗名・内容で検索" oninput="filterList('cash_ryoshu')">
     </div>
+    <button onclick="toggleSelectMode('cash_ryoshu')" id="sel-btn-cash_ryoshu" style="background:#fff;color:#e53935;border:1.5px solid #e53935;border-radius:8px;padding:6px 12px;font-size:13px;cursor:pointer;white-space:nowrap;height:38px">選択</button>
     <select id="cash_ryoshu-month-filter" onchange="renderList('cash_ryoshu')" style="border:1px solid #ccc;border-radius:8px;padding:6px 10px;font-size:13px;background:#fff;height:38px">
       <option value="">全月</option>
     </select>
@@ -1002,7 +1007,13 @@ function renderList(type) {
     return;
   }
   const localPhotos = getLocalPhotos();
-  container.innerHTML = filtered.map((r,i) => {
+  const isSelectMode = !!__selectMode[type];
+  const selected = __selectedIds[type] || new Set();
+  const selBar = `<div id="selbar-${type}" style="display:none;background:#e53935;color:#fff;padding:10px 16px;border-radius:12px;margin-bottom:10px;align-items:center;justify-content:space-between;gap:10px">
+    <span class="sel-count" style="font-size:14px;font-weight:600">0件を選択中</span>
+    <button onclick="deleteSelected('${type}')" style="background:#fff;color:#e53935;border:none;border-radius:8px;padding:7px 16px;font-size:14px;font-weight:700;cursor:pointer;">🗑 削除</button>
+  </div>`;
+  container.innerHTML = selBar + filtered.map((r,i) => {
     const name = (type==='ryoshu'||type==='cash_ryoshu') ? r['店舗・支払先'] : r['請求元'];
     const sub = (type==='ryoshu'||type==='cash_ryoshu') ? r['内容'] : r['件名'];
     const inv = r['インボイス番号'];
@@ -1015,17 +1026,77 @@ function renderList(type) {
     const photoBtn = hasPhoto ? `<button onclick="event.stopPropagation();viewPhoto('${type}',${r['No.']})" style="padding:3px 8px;background:#FFF3E0;color:#E65100;border:none;border-radius:6px;font-size:12px;cursor:pointer;margin-left:6px;">📷 写真</button>` : '';
     const srMatches = type === 'ryoshu' ? findSmartReceipt(r['日付'], r['金額（税込）']) : [];
     const srBtn = srMatches.length > 0 ? `<button onclick="event.stopPropagation();viewSmartReceipt('${r['日付']}',${r['金額（税込）']})" style="padding:3px 8px;background:#E8F5E9;color:#2E7D32;border:none;border-radius:6px;font-size:12px;cursor:pointer;margin-left:6px;">🧾 明細</button>` : '';
-    // ⑨ 外部領収書取得ボタン（閲覧のみ／購入・変更・設定変更は一切行わない）
     const webReceiptUrl = type === 'ryoshu' ? getReceiptSiteUrl(r['店舗・支払先'] || '') : null;
     const webReceiptBtn = webReceiptUrl ? `<button onclick="event.stopPropagation();openReceiptSite('${webReceiptUrl}')" style="padding:3px 8px;background:#F3E8FF;color:#7E22CE;border:none;border-radius:6px;font-size:12px;cursor:pointer;margin-left:6px;">🌐 領収書</button>` : '';
-    return `<div class="entry" onclick="showDetail('${type}',${data.indexOf(r)})">
-      <div class="entry-top"><span class="entry-name">${name||''}</span><span class="entry-amount">${fmt(r['金額（税込）'])}</span></div>
+    const isSel = selected.has(String(r['No.']));
+    const cbHtml = isSelectMode ? `<input type="checkbox" class="sel-cb" ${isSel?'checked':''} onclick="event.stopPropagation();toggleSelectEntry('${type}',${r['No.']})" style="width:20px;height:20px;margin-right:10px;flex-shrink:0;accent-color:#e53935;">` : '';
+    const clickAction = isSelectMode ? `toggleSelectEntry('${type}',${r['No.']})` : `showDetail('${type}',${data.indexOf(r)})`;
+    return `<div class="entry${isSel?' selected':''}" data-selkey="${type}_${r['No.']}" onclick="${clickAction}">
+      <div class="entry-top">${cbHtml}<span class="entry-name">${name||''}</span><span class="entry-amount">${fmt(r['金額（税込）'])}</span></div>
       <div class="entry-sub">${r['日付']||''} · ${r['支払方法']||''} · ${sub||''} ${badge}${pdfBtn}${photoBtn}${srBtn}${webReceiptBtn}</div>
     </div>`;
   }).join('');
 }
 
 function filterList(type) { renderList(type); }
+
+// ===== 選択削除 =====
+const __selectMode = {};
+const __selectedIds = {};
+
+function toggleSelectMode(type) {
+  __selectMode[type] = !__selectMode[type];
+  __selectedIds[type] = new Set();
+  const btn = document.getElementById('sel-btn-' + type);
+  if (btn) btn.textContent = __selectMode[type] ? 'キャンセル' : '選択';
+  renderList(type);
+}
+
+function toggleSelectEntry(type, no) {
+  if (!__selectedIds[type]) __selectedIds[type] = new Set();
+  const key = String(no);
+  if (__selectedIds[type].has(key)) __selectedIds[type].delete(key);
+  else __selectedIds[type].add(key);
+  // update UI without full re-render
+  const el = document.querySelector(`[data-selkey="${type}_${no}"]`);
+  if (el) {
+    const cb = el.querySelector('.sel-cb');
+    if (cb) cb.checked = __selectedIds[type].has(key);
+    el.classList.toggle('selected', __selectedIds[type].has(key));
+  }
+  const bar = document.getElementById('selbar-' + type);
+  if (bar) {
+    const cnt = __selectedIds[type].size;
+    bar.style.display = cnt > 0 ? 'flex' : 'none';
+    const lbl = bar.querySelector('.sel-count');
+    if (lbl) lbl.textContent = cnt + '件を選択中';
+  }
+}
+
+function deleteSelected(type) {
+  const ids = __selectedIds[type];
+  if (!ids || ids.size === 0) return;
+  if (!confirm(ids.size + '件を削除しますか？')) return;
+  const data = type==='ryoshu' ? ryoshuData : type==='cash_ryoshu' ? cashRyoshuData : shiireData;
+  const lp = getLocalPhotos();
+  [...ids].forEach(no => {
+    const idx = data.findIndex(r => String(r['No.']) === no);
+    if (idx < 0) return;
+    const r = data[idx];
+    // 写真も削除
+    const pk = type === 'cash_ryoshu' ? 'c' + r['No.'] : String(r['No.']);
+    if (lp[pk]) delete lp[pk];
+    data.splice(idx, 1);
+  });
+  try { localStorage.setItem('furue_photos', JSON.stringify(lp)); } catch {}
+  saveData(type, data);
+  __selectMode[type] = false;
+  __selectedIds[type] = new Set();
+  const btn = document.getElementById('sel-btn-' + type);
+  if (btn) btn.textContent = '選択';
+  renderList(type);
+  showToast('削除しました');
+}
 
 function viewPhoto(type, no) {
   const key = type === 'cash_ryoshu' ? 'c' + no : String(no);
@@ -1925,10 +1996,34 @@ function addEntry() {
     entry['店舗・支払先'] = document.getElementById('f-name').value;
     entry['内容'] = document.getElementById('f-content').value;
   }
-  // 写真があれば原紙として保存（ローカルのみ）
+  // クレジット領収書 + 写真あり → 仮置きに自動保管（月次明細到着後に照合）
+  if (!isShiire && !isCashRyoshu && currentPhotoBase64) {
+    const pending = getPendingReceipts();
+    pending.push({
+      id: Date.now() + '_' + Math.random().toString(36).slice(2),
+      photo: 'data:image/jpeg;base64,' + currentPhotoBase64,
+      storeName: entry['店舗・支払先'] || '',
+      amount: String(entry['金額（税込）'] || ''),
+      memo: entry['内容'] || '',
+      createdAt: date
+    });
+    savePendingReceipts(pending);
+    currentPhotoBase64 = null;
+    document.getElementById('photo-preview').style.display = 'none';
+    document.getElementById('photo-input').value = '';
+    document.getElementById('f-amount').value='';
+    document.getElementById('f-name').value='';
+    document.getElementById('f-content').value='';
+    document.getElementById('f-invoice').value='';
+    document.getElementById('f-memo').value='';
+    showToast('📸 クレジット仮置きに保管しました（明細到着後に照合）');
+    showPage('credit');
+    return;
+  }
+
+  // 写真があれば原紙として保存（現金領収書・仕入）
   if (!isShiire && currentPhotoBase64) {
     entry['photo'] = currentPhotoBase64;
-    // 現金領収書は 'c' プレフィックス付きキーで保存
     const photoKey = isCashRyoshu ? 'c' + newNo : newNo;
     saveLocalPhoto(photoKey, currentPhotoBase64);
     currentPhotoBase64 = null;

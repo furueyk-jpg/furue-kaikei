@@ -319,6 +319,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue','Hiragino San
       <div style="position:relative;height:150px"><canvas id="chart-shiire-pie"></canvas></div>
     </div>
   </div>
+  <div id="dash-monthly-table" style="margin-top:10px"></div>
   <div style="background:#fff;border-radius:10px;border:0.5px solid rgba(0,0,0,0.1);padding:12px;margin-top:10px;font-size:12px;color:#52514e;line-height:1.7">
     <div style="font-weight:500;margin-bottom:4px;font-size:13px">税理士への共有方法</div>
     「書き出し」タブからCSVをダウンロード → メール添付または共有フォルダに保存。インボイス番号も含まれます。
@@ -738,7 +739,27 @@ function renderDashboard() {
   });
   const shiireM = monthKeys.map(m => shiireByMonth[m]||0);
 
-  const kyuyo=[286179,215745,230016,325751,380625,309495,306260,306260,343750,379699,338422,400038];
+  // 給与月別（kyuyoDataから動的取得）
+  const kyuyoByMonth = {};
+  if (typeof kyuyoData === 'object' && kyuyoData !== null) {
+    Object.keys(kyuyoData).forEach(ym => {
+      const key = ym.replace('-','');
+      const entries = Array.isArray(kyuyoData[ym]) ? kyuyoData[ym] : Object.values(kyuyoData[ym]||{});
+      kyuyoByMonth[key] = entries.reduce((s,e) => s + (Number(e.net||e['支給額']||e['差引支給額']||0)), 0);
+    });
+  }
+  // fallback: ジョブカン所得税徴収高集計資料より確認済み支給総額（FY2026）
+  // 4月〜7月: ジョブカン確認済み, 8月〜3月: 未確定(0)
+  const kyuyoFallback=[7810275,6927166,7217461,7364969,0,0,0,0,0,0,0,0];
+  const kyuyo = monthKeys.map((m,i) => kyuyoByMonth[m] || kyuyoFallback[i]);
+
+  // 領収書月別
+  const ryoshuByMonth = {};
+  ryoshuData.forEach(r => {
+    const m = (r['日付']||'').replace(/\//g,'').slice(0,6);
+    if (m) ryoshuByMonth[m] = (ryoshuByMonth[m]||0) + (Number(r['金額（税込）'])||0);
+  });
+  const ryoshuM = monthKeys.map(m => ryoshuByMonth[m]||0);
 
   function mkChart(id, cfg) {
     if (dashCharts[id]) { dashCharts[id].destroy(); }
@@ -754,6 +775,53 @@ function renderDashboard() {
   const pieData = shiireM.filter(v=>v>0);
   const pieColors = ['#185FA5','#0C447C','#378ADD','#85B7EB','#2e7d32','#4CAF50','#FFC107','#FF5722','#9C27B0','#00BCD4','#E91E63','#607D8B'];
   mkChart('chart-shiire-pie',{type:'doughnut',data:{labels:pieLabels,datasets:[{data:pieData,backgroundColor:pieColors.slice(0,pieData.length),borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:9},boxWidth:8}},tooltip:{callbacks:{label:c=>'¥'+(c.raw/10000).toFixed(0)+'万'}}},cutout:'55%'}});
+
+  // ===== 月別集計詳細テーブル =====
+  const fmt = v => v ? '¥'+v.toLocaleString() : '—';
+  let totalU=0, totalR=0, totalS=0, totalK=0;
+  let rows = monthKeys.map((m,i) => {
+    const u = uriage[i], r = ryoshuM[i], s = shiireM[i], k = kyuyo[i];
+    const bal = u - r - s - k;
+    totalU+=u; totalR+=r; totalS+=s; totalK+=k;
+    const balColor = bal>=0 ? '#155724' : '#A32D2D';
+    return `<tr style="border-bottom:0.5px solid #eee">
+      <td style="padding:7px 8px;font-weight:500;white-space:nowrap">${months[i]}</td>
+      <td style="padding:7px 8px;text-align:right;color:#155724">${fmt(u)}</td>
+      <td style="padding:7px 8px;text-align:right;color:#185FA5">${fmt(r)}</td>
+      <td style="padding:7px 8px;text-align:right;color:#BA7517">${fmt(s)}</td>
+      <td style="padding:7px 8px;text-align:right;color:#A32D2D">${fmt(k)}</td>
+      <td style="padding:7px 8px;text-align:right;font-weight:600;color:${balColor}">${fmt(bal)}</td>
+    </tr>`;
+  }).join('');
+  const totalBal = totalU - totalR - totalS - totalK;
+  const totalBalColor = totalBal>=0 ? '#155724' : '#A32D2D';
+  const tableEl = document.getElementById('dash-monthly-table');
+  if (tableEl) tableEl.innerHTML = `
+    <div style="font-size:13px;font-weight:600;color:#1B2C4E;margin-bottom:6px">月別集計詳細</div>
+    <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
+    <table style="width:100%;border-collapse:collapse;font-size:12px;background:#fff;border-radius:10px;overflow:hidden;border:0.5px solid rgba(0,0,0,0.08)">
+      <thead>
+        <tr style="background:#1B2C4E;color:#fff">
+          <th style="padding:8px;text-align:left;font-weight:500">月</th>
+          <th style="padding:8px;text-align:right;font-weight:500">売上（税別）</th>
+          <th style="padding:8px;text-align:right;font-weight:500">領収書</th>
+          <th style="padding:8px;text-align:right;font-weight:500">仕入請求</th>
+          <th style="padding:8px;text-align:right;font-weight:500">給与</th>
+          <th style="padding:8px;text-align:right;font-weight:500">差引収支</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+      <tfoot>
+        <tr style="background:#f5f5f5;font-weight:600">
+          <td style="padding:8px">合計</td>
+          <td style="padding:8px;text-align:right;color:#155724">${fmt(totalU)}</td>
+          <td style="padding:8px;text-align:right;color:#185FA5">${fmt(totalR)}</td>
+          <td style="padding:8px;text-align:right;color:#BA7517">${fmt(totalS)}</td>
+          <td style="padding:8px;text-align:right;color:#A32D2D">${fmt(totalK)}</td>
+          <td style="padding:8px;text-align:right;color:${totalBalColor}">${fmt(totalBal)}</td>
+        </tr>
+      </tfoot>
+    </table></div>`;
 }
 
 async function refreshData() {

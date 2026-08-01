@@ -780,7 +780,7 @@ function showDetail(type, idx) {
 }
 
 function showPhoto(type, idx) {
-  const r = (type==='ryoshu' ? ryoshuData : shiireData)[idx];
+  const r = (type==='ryoshu' ? ryoshuData : type==='cash_ryoshu' ? cashRyoshuData : shiireData)[idx];
   if (!r['photo']) return;
   const overlay = document.createElement('div');
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:400;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px';
@@ -886,6 +886,14 @@ function saveEdit(type, idx) {
   r['インボイス番号'] = document.getElementById('edit-invoice').value.trim() || null;
   r['備考'] = document.getElementById('edit-memo').value || null;
   if (isRyoshu && newType !== type) {
+    // 写真のローカルキーを移行（ryoshu=No., cash_ryoshu='c'+No.）
+    if (r.photo && r['No.'] != null) {
+      const lp = getLocalPhotos();
+      const oldKey = type === 'ryoshu' ? String(r['No.']) : String('c' + r['No.']);
+      const newKey = newType === 'ryoshu' ? String(r['No.']) : String('c' + r['No.']);
+      if (lp[oldKey]) { lp[newKey] = lp[oldKey]; delete lp[oldKey]; }
+      try { localStorage.setItem('furue_photos', JSON.stringify(lp)); } catch {}
+    }
     data.splice(idx, 1);
     saveData(type, data);
     const dest = newType==='ryoshu' ? ryoshuData : cashRyoshuData;

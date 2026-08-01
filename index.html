@@ -1068,6 +1068,14 @@ function editEntry(type, idx) {
   const kanjouList = ['会議費','消耗品費','交際費','旅費交通費','福利厚生費','仕入','租税公課','その他'];
   const kanjouOpts = kanjouList.map(k=>`<option value="${k}" ${r['勘定科目（参考）']===k?'selected':''}>${k}</option>`).join('');
   const fld = (lbl,id,val,t='text')=>`<div style="margin-bottom:12px"><label style="font-size:12px;color:#898781;font-weight:500;display:block;margin-bottom:5px">${lbl}</label><input type="${t}" id="${id}" value="${String(val||'').replace(/"/g,'&quot;')}" style="width:100%;padding:10px 12px;border:0.5px solid #ccc;border-radius:8px;font-size:15px;color:#0b0b0b;background:#fff;outline:none"></div>`;
+  window.__editPhotoBase64 = null;
+  window.__editPhotoClear = false;
+  let photoSection = '';
+  if (isRyoshu && r['No.'] != null) {
+    const pk = type === 'cash_ryoshu' ? 'c' + String(r['No.']) : String(r['No.']);
+    const ep = getLocalPhotos()[pk] || r.photo || null;
+    photoSection = `<div style="margin-bottom:12px"><label style="font-size:12px;color:#898781;font-weight:500;display:block;margin-bottom:5px">📷 写真領収書</label><div id="edit-photo-preview" style="margin-bottom:8px${ep?'':';display:none'}"><img id="edit-preview-img" src="${ep?'data:image/jpeg;base64,'+ep:''}" style="max-width:100%;border-radius:8px;border:0.5px solid #ccc"><button onclick="clearEditPhoto()" style="margin-top:4px;width:100%;padding:7px;background:#fff;color:#d32f2f;border:1px solid #d32f2f;border-radius:8px;font-size:12px;cursor:pointer">✕ 写真を削除</button></div><input type="file" id="edit-photo-input" accept="image/*" capture="environment" style="display:none" onchange="handleEditPhoto(this)"><input type="file" id="edit-photo-input-lib" accept="image/*" style="display:none" onchange="handleEditPhoto(this)"><div style="display:flex;gap:8px"><label for="edit-photo-input" style="flex:1;background:#185FA5;color:#fff;border-radius:10px;padding:10px;text-align:center;font-size:13px;font-weight:500;cursor:pointer">📷 カメラで撮影</label><label for="edit-photo-input-lib" style="flex:1;background:#fff;color:#185FA5;border:1px solid #185FA5;border-radius:10px;padding:10px;text-align:center;font-size:13px;font-weight:500;cursor:pointer">🖼 ライブラリから</label></div></div>`;
+  }
   document.getElementById('modal-title').textContent = '✏️ 編集';
   document.getElementById('modal-body').innerHTML = `
     ${isRyoshu ? `<div style="margin-bottom:12px"><label style="font-size:12px;color:#898781;font-weight:500;display:block;margin-bottom:5px">種別（変更すると自動振り替え）</label><select id="edit-type" style="width:100%;padding:10px 12px;border:0.5px solid #ccc;border-radius:8px;font-size:15px;color:#0b0b0b;background:#fff;-webkit-appearance:none"><option value="ryoshu" ${type==='ryoshu'?'selected':''}>クレジット領収書</option><option value="cash_ryoshu" ${type==='cash_ryoshu'?'selected':''}>現金領収書</option></select></div>` : ''}
@@ -1079,6 +1087,7 @@ function editEntry(type, idx) {
     <div style="margin-bottom:12px"><label style="font-size:12px;color:#898781;font-weight:500;display:block;margin-bottom:5px">勘定科目</label><select id="edit-kanjou" style="width:100%;padding:10px 12px;border:0.5px solid #ccc;border-radius:8px;font-size:15px;color:#0b0b0b;background:#fff;-webkit-appearance:none">${kanjouOpts}</select></div>
     ${fld('インボイス番号（T+13桁）','edit-invoice',r['インボイス番号'])}
     ${fld('備考','edit-memo',r['備考'])}
+    ${photoSection}
     <button onclick="saveEdit('${type}',${idx})" style="width:100%;padding:14px;background:#185FA5;color:#fff;border:none;border-radius:10px;font-size:16px;font-weight:600;cursor:pointer;margin-bottom:10px">保存する</button>
     <button onclick="deleteEntry('${type}',${idx})" style="width:100%;padding:12px;background:#fff;color:#d32f2f;border:1px solid #d32f2f;border-radius:10px;font-size:14px;cursor:pointer">🗑 削除する</button>
   `;
@@ -1104,6 +1113,21 @@ function saveEdit(type, idx) {
   r['勘定科目（参考）'] = document.getElementById('edit-kanjou').value;
   r['インボイス番号'] = document.getElementById('edit-invoice').value.trim() || null;
   r['備考'] = document.getElementById('edit-memo').value || null;
+  // 写真の追加・削除（編集時）
+  if (isRyoshu && r['No.'] != null) {
+    const curKey = type === 'cash_ryoshu' ? 'c' + String(r['No.']) : String(r['No.']);
+    if (window.__editPhotoBase64) {
+      r.photo = window.__editPhotoBase64;
+      const lp = getLocalPhotos(); lp[curKey] = window.__editPhotoBase64;
+      try { localStorage.setItem('furue_photos', JSON.stringify(lp)); } catch {}
+      window.__editPhotoBase64 = null; window.__editPhotoClear = false;
+    } else if (window.__editPhotoClear) {
+      r.photo = null;
+      const lp = getLocalPhotos(); delete lp[curKey];
+      try { localStorage.setItem('furue_photos', JSON.stringify(lp)); } catch {}
+      window.__editPhotoClear = false;
+    }
+  }
   if (isRyoshu && newType !== type) {
     // 写真のローカルキーを移行（ryoshu=No., cash_ryoshu='c'+No.）
     if (r.photo && r['No.'] != null) {
@@ -1739,6 +1763,7 @@ function addEntry() {
   // 写真があれば原紙として保存（ローカルのみ）
   if (!isShiire && currentPhotoBase64) {
     entry['photo'] = currentPhotoBase64;
+    // 現金領収書は 'c' プレフィックス付きキーで保存
     const photoKey = isCashRyoshu ? 'c' + newNo : newNo;
     saveLocalPhoto(photoKey, currentPhotoBase64);
     currentPhotoBase64 = null;
@@ -1794,6 +1819,26 @@ function handlePhoto(input) {
     }
   };
   reader.readAsDataURL(file);
+}
+
+function handleEditPhoto(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    window.__editPhotoBase64 = e.target.result.split(',')[1];
+    window.__editPhotoClear = false;
+    const prev = document.getElementById('edit-photo-preview');
+    const img = document.getElementById('edit-preview-img');
+    if (prev && img) { img.src = e.target.result; prev.style.display = 'block'; }
+  };
+  reader.readAsDataURL(file);
+}
+function clearEditPhoto() {
+  window.__editPhotoBase64 = null;
+  window.__editPhotoClear = true;
+  const prev = document.getElementById('edit-photo-preview');
+  if (prev) prev.style.display = 'none';
 }
 
 async function runOCR() {
@@ -2440,6 +2485,9 @@ function renderUriagePage() {
           <input type="checkbox" ${r['振込完了'] ? 'checked' : ''} onchange="saveUriageCheck(${globalIdx},'振込完了',this.checked)" style="width:16px;height:16px;accent-color:#2e7d32">
           <span style="color:#2e7d32;font-weight:500">振込完了</span>
         </label>
+        ${r['misoca_no'] ? `<span style="display:flex;align-items:center;gap:4px;font-size:13px;${r['misoca_sent'] ? 'color:#185FA5;font-weight:600' : 'color:#999'}" title="MISOCA ${r['misoca_no']}">
+          ${r['misoca_sent'] ? '☑' : '☐'} 請求発送済
+        </span>` : ''}
       </div>
     </div>`;
   });

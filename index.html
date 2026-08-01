@@ -670,6 +670,9 @@ function saveData(key, data) {
   db.ref('furue/'+fbKey).set(sanitizeForFb(forFb)).catch(() => showToast('同期エラー（ローカル保存済み）'));
   // localStorageにもバックアップ
   try { localStorage.setItem('furue_'+fbKey, JSON.stringify(data)); } catch {}
+  // 集計タブが表示中なら再描画
+  const dashEl = document.getElementById('page-dashboard');
+  if (dashEl && dashEl.classList.contains('active')) renderDashboard();
 }
 
 let ryoshuData = [];

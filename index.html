@@ -668,7 +668,7 @@ function populateMonthFilter(type, data) {
   const months = [...new Set(data.map(r => {
     const d = r['日付'] || '';
     return d.replace(/\//g,'').slice(0,6);
-  }).filter(m => m.length === 6 && /^\d{6}$/.test(m)))].sort();
+  }).filter(m => m.length === 6 && /^\d{6}$/.test(m) && m <= (()=>{const n=new Date();return n.getFullYear()+String(n.getMonth()+1).padStart(2,'0');})()))].sort();
   const now = new Date();
   const currentYm = now.getFullYear() + String(now.getMonth()+1).padStart(2,'0');
   // 初回表示時（sel.valueが空）は当月をデフォルト選択、なければ最新月
@@ -2160,7 +2160,7 @@ function renderUriagePage() {
   // 月フィルターを動的に生成（初回表示時は当月 or 最新月をデフォルト選択）
   const sel = document.getElementById('uriage-month-filter');
   if (sel) {
-    const months = [...new Set(uriageData.map(r => (r['日付']||'').replace(/\//g,'').slice(0,6)).filter(m => m.length===6 && /^\d{6}$/.test(m)))].sort();
+    const months = [...new Set(uriageData.map(r => (r['日付']||'').replace(/\//g,'').slice(0,6)).filter(m => m.length===6 && /^\d{6}$/.test(m) && m <= (()=>{const n=new Date();return n.getFullYear()+String(n.getMonth()+1).padStart(2,'0');})()))].sort();
     const now = new Date();
     const currentYm = now.getFullYear() + String(now.getMonth()+1).padStart(2,'0');
     const cur = sel.value || (months.includes(currentYm) ? currentYm : (months.length > 0 ? months[months.length-1] : ''));

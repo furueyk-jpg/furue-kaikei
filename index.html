@@ -669,7 +669,10 @@ function populateMonthFilter(type, data) {
     const d = r['日付'] || '';
     return d.replace(/\//g,'').slice(0,6);
   }).filter(m => m.length === 6))].sort();
-  const cur = sel.value;
+  const now = new Date();
+  const currentYm = now.getFullYear() + String(now.getMonth()+1).padStart(2,'0');
+  // 初回表示時（sel.valueが空）は当月をデフォルト選択、なければ最新月
+  const cur = sel.value || (months.includes(currentYm) ? currentYm : (months.length > 0 ? months[months.length-1] : ''));
   sel.innerHTML = '<option value="">全月</option>' + months.map(m =>
     `<option value="${m}"${m===cur?' selected':''}>${m.slice(0,4)}年${Number(m.slice(4))}月</option>`
   ).join('');
@@ -2412,7 +2415,12 @@ function renderCreditPage() {
   const now = new Date();
   const curYm = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
   const curEl = document.getElementById('credit-month-'+curYm);
-  if (curEl) curEl.style.display = 'block';
+  if (curEl) {
+    curEl.style.display = 'block';
+  } else if (sortedMonths.length > 0) {
+    const latestEl = document.getElementById('credit-month-'+sortedMonths[0]);
+    if (latestEl) latestEl.style.display = 'block';
+  }
 }
 
 function toggleCreditMonth(ym) {

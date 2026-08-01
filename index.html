@@ -484,6 +484,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue','Hiragino San
 </div>
 
 <!-- PDF インラインビューア -->
+<!-- 写真フルスクリーンビューア -->
+<div id="photo-viewer-overlay" style="display:none;position:fixed;inset:0;z-index:700;background:#000;flex-direction:column;" onclick="closePhotoViewer()">
+  <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:rgba(0,0,0,0.7);flex-shrink:0;">
+    <span style="color:#fff;font-size:14px;">📷 写真領収書</span>
+    <button onclick="closePhotoViewer()" style="background:none;border:none;color:#fff;font-size:22px;cursor:pointer;padding:4px 0 4px 12px;">✕</button>
+  </div>
+  <div style="flex:1;display:flex;align-items:center;justify-content:center;overflow:hidden;padding:8px;">
+    <img id="photo-viewer-img" src="" style="max-width:100%;max-height:100%;object-fit:contain;border-radius:6px;">
+  </div>
+</div>
+
 <div id="pdf-viewer-overlay" style="display:none;position:fixed;inset:0;z-index:600;background:#222;flex-direction:column;">
   <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#1a1a1a;flex-shrink:0;">
     <span id="pdf-viewer-title" style="color:#fff;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;"></span>
@@ -956,12 +967,13 @@ function viewPhoto(type, no) {
   const key = type === 'cash_ryoshu' ? 'c' + no : String(no);
   const b64 = getLocalPhotos()[key];
   if (!b64) { showToast('写真データが見つかりません'); return; }
-  document.getElementById('modal-title').textContent = '📷 写真領収書';
-  document.getElementById('modal-body').innerHTML = `
-    <img src="data:image/jpeg;base64,${b64}" style="width:100%;border-radius:10px;display:block">
-    <button onclick="document.getElementById('modal').classList.remove('open')" style="width:100%;padding:13px;background:#f7f5f1;border:none;border-radius:10px;font-size:15px;font-weight:500;cursor:pointer;margin-top:12px">閉じる</button>
-  `;
-  document.getElementById('modal').classList.add('open');
+  document.getElementById('photo-viewer-img').src = 'data:image/jpeg;base64,' + b64;
+  const ov = document.getElementById('photo-viewer-overlay');
+  ov.style.display = 'flex';
+}
+function closePhotoViewer() {
+  document.getElementById('photo-viewer-overlay').style.display = 'none';
+  document.getElementById('photo-viewer-img').src = '';
 }
 
 // ===== PDF ギャラリー（領収書・仕入請求書共用）=====

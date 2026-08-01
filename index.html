@@ -702,7 +702,13 @@ async function loadAllData() {
     }
     if (val && val.cash_ryoshu) {
       const photos = getLocalPhotos();
-      cashRyoshuData = restoreFromFb(val.cash_ryoshu).filter(Boolean).map(r => ({...r, photo: photos[String('c'+r['No.'])] || null}));
+      // furue_cash_ryoshu にローカル保存されたphotoもフォールバックとして使用
+      const localCashPhotoMap = {};
+      try {
+        const scr = localStorage.getItem('furue_cash_ryoshu');
+        if (scr) JSON.parse(scr).forEach(r => { if (r.photo && r['No.'] != null) localCashPhotoMap['c' + r['No.']] = r.photo; });
+      } catch {}
+      cashRyoshuData = restoreFromFb(val.cash_ryoshu).filter(Boolean).map(r => ({...r, photo: photos[String('c'+r['No.'])] || localCashPhotoMap['c' + r['No.']] || null}));
     } else {
       cashRyoshuData = [];
     }
@@ -729,7 +735,7 @@ async function loadAllData() {
     const photos = getLocalPhotos();
     const raw = sr ? JSON.parse(sr) : RYOSHU_INIT.map(r=>({...r}));
     ryoshuData = raw.map(r => ({...r, photo: r.photo || photos[String(r['No.'])] || null}));
-    cashRyoshuData = scr ? JSON.parse(scr) : [];
+    cashRyoshuData = scr ? JSON.parse(scr).map(r => ({...r, photo: r.photo || photos['c' + r['No.']] || null})) : [];
     shiireData = ss ? JSON.parse(ss) : SHIIRE_INIT.map(r=>({...r}));
     const sc = localStorage.getItem('furue_credit');
     if (sc) creditData = JSON.parse(sc);
@@ -943,8 +949,6 @@ async function refreshData() {
   } finally {
     if (btn) btn.classList.remove('spinning');
   }
-  // Excelとの同期は sync_to_firebase.py を実行してください
-  document.getElementById('sync-modal-overlay').classList.add('open');
 }
 
 function closeSyncModal() {
@@ -1087,7 +1091,7 @@ function replacePhotoFromViewer(input) {
     const rec = data.find(r => String(r['No.']) === String(no));
     if (rec) rec.photo = b64;
     // ビューア更新
-    document.getElementById('photo-viewer-img').src = e.target.result;
+    document.getElementById('photo-viewer-img').src = compressed;
     showToast('✅ 写真を入れ替えました');
     renderList(type);
   };
@@ -1279,7 +1283,8 @@ function saveEdit(type, idx) {
     if (window.__editPhotoBase64) {
       r.photo = window.__editPhotoBase64;
       const lp = getLocalPhotos(); lp[curKey] = window.__editPhotoBase64;
-      try { localStorage.setItem('furue_photos', JSON.stringify(lp)); } catch {}
+      try { localStorage.setItem('furue_photos', JSON.stringify(lp)); }
+      catch(e) { showToast('⚠️ 写真保存失敗: 空き容量不足です'); }
       window.__editPhotoBase64 = null; window.__editPhotoClear = false;
     } else if (window.__editPhotoClear) {
       r.photo = null;
@@ -1963,7 +1968,7 @@ function exportCSV(type) {
 let currentPhotoBase64 = null;
 
 // 画像圧縮：iOSカメラ写真は大きいのでlocalStorage 5MB制限対策
-function compressImage(dataUrl, maxWidth=1200, quality=0.75) {
+function compressImage(dataUrl, maxWidth=800, quality=0.60) {
   return new Promise(resolve => {
     const img = new Image();
     img.onload = () => {

@@ -32,7 +32,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue','Hiragino San
 .navbar{position:sticky;top:0;z-index:100;background:linear-gradient(160deg,var(--primary) 0%,var(--primary-2) 100%);padding:calc(var(--safe-top) + 10px) 16px 12px;box-shadow:0 4px 24px rgba(0,0,0,0.2);}
 .navbar-inner{display:flex;align-items:center;gap:10px;max-width:600px;margin:0 auto;}
 .nav-brand{flex:1}
-.nav-title{font-size:16px;font-weight:700;color:#fff;letter-spacing:0.2px;}
+.nav-title{font-size:18px;font-weight:700;color:#fff;letter-spacing:0.2px;}
 .nav-sub{font-size:9px;color:rgba(255,255,255,0.45);letter-spacing:1.5px;text-transform:uppercase;margin-top:1px;}
 .nav-btn{background:rgba(255,255,255,0.13);border:1px solid rgba(255,255,255,0.18);color:#fff;cursor:pointer;padding:7px 14px;border-radius:22px;font-size:13px;font-weight:500;transition:background .2s;white-space:nowrap;}
 .nav-btn:active{background:rgba(255,255,255,0.25);}
@@ -43,7 +43,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue','Hiragino San
 /* ── TABS ── */
 .tabs{display:flex;background:var(--primary);overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;position:sticky;top:calc(var(--safe-top) + 58px);z-index:99;padding:0 12px 10px;gap:6px;}
 .tabs::-webkit-scrollbar{display:none;}
-.tab{flex-shrink:0;padding:6px 15px;font-size:12px;font-weight:500;color:rgba(255,255,255,0.55);border:1px solid transparent;background:rgba(255,255,255,0.07);border-radius:22px;cursor:pointer;white-space:nowrap;transition:all .2s;}
+.tab{flex-shrink:0;padding:7px 16px;font-size:14px;font-weight:500;color:rgba(255,255,255,0.55);border:1px solid transparent;background:rgba(255,255,255,0.07);border-radius:22px;cursor:pointer;white-space:nowrap;transition:all .2s;}
 .tab.active{background:var(--accent);color:#fff;border-color:transparent;box-shadow:0 2px 10px rgba(217,113,70,0.45);}
 .tab:not(.active):hover{background:rgba(255,255,255,0.13);color:rgba(255,255,255,0.8);}
 
@@ -67,22 +67,22 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue','Hiragino San
 .entry{background:var(--card);border-radius:16px;padding:15px 16px;margin-bottom:10px;border:1px solid var(--border);box-shadow:var(--shadow-sm);cursor:pointer;transition:transform .15s,box-shadow .15s;}
 .entry:active{transform:scale(0.986);box-shadow:none;}
 .entry-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:4px;}
-.entry-name{font-size:14px;font-weight:600;color:var(--text);flex:1;line-height:1.3;}
-.entry-amount{font-size:15px;font-weight:700;color:var(--primary-2);white-space:nowrap;}
-.entry-sub{font-size:12px;color:var(--text3);line-height:1.5;}
+.entry-name{font-size:16px;font-weight:600;color:var(--text);flex:1;line-height:1.3;}
+.entry-amount{font-size:17px;font-weight:700;color:var(--primary-2);white-space:nowrap;}
+.entry-sub{font-size:14px;color:var(--text3);line-height:1.5;}
 
 /* ── BADGE ── */
-.badge{display:inline-block;font-size:10px;font-weight:600;padding:2px 8px;border-radius:10px;background:var(--warning-bg);color:var(--warning);margin-left:4px;}
+.badge{display:inline-block;font-size:12px;font-weight:600;padding:3px 9px;border-radius:10px;background:var(--warning-bg);color:var(--warning);margin-left:4px;}
 .badge.ok{background:var(--success-bg);color:var(--success);}
 
 /* ── SECTION HDR ── */
-.section-hdr{font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;padding:10px 2px 8px;}
+.section-hdr{font-size:13px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.8px;padding:10px 2px 8px;}
 
 /* ── FORM ── */
 .form-card{background:var(--card);border-radius:18px;border:1px solid var(--border);padding:18px;margin-bottom:12px;box-shadow:var(--shadow-sm);}
 .form-row{margin-bottom:16px;}
 .form-row label{display:block;font-size:12px;font-weight:600;color:var(--text2);margin-bottom:6px;letter-spacing:.2px;}
-.form-row input,.form-row select,.form-row textarea{width:100%;padding:12px 14px;border:1.5px solid var(--border-2);border-radius:12px;font-size:15px;color:var(--text);background:var(--card-2);outline:none;-webkit-appearance:none;appearance:none;transition:border-color .2s,box-shadow .2s;}
+.form-row input,.form-row select,.form-row textarea{width:100%;padding:13px 14px;border:1.5px solid var(--border-2);border-radius:12px;font-size:16px;color:var(--text);background:var(--card-2);outline:none;-webkit-appearance:none;appearance:none;transition:border-color .2s,box-shadow .2s;}
 .form-row input:focus,.form-row select:focus,.form-row textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(217,113,70,.12);background:#fff;}
 .form-row select{background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%238a8a9e' stroke-width='1.5' fill='none'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center;padding-right:38px;}
 .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
@@ -362,6 +362,18 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue','Hiragino San
   <button class="btn-export" onclick="exportCSV('cash_ryoshu')">📥 現金領収書 CSV書き出し</button>
   <button class="btn-export" onclick="exportCSV('shiire')">📥 仕入請求書 CSV書き出し</button>
 
+  <!-- ③⑤ ファイル同期チェック -->
+  <div class="section-hdr" style="margin-top:12px">📂 ファイル同期チェック（③⑤）</div>
+  <div style="background:#F0F9FF;border:1.5px solid #0EA5E9;border-radius:12px;padding:14px 16px;margin-bottom:10px;">
+    <div style="font-size:13px;font-weight:600;color:#0369A1;margin-bottom:6px;">🗂 (有)フルエ総務 ↔ 会計簿 照合</div>
+    <div style="font-size:12px;color:#0369A1;margin-bottom:10px;line-height:1.7;">
+      仕入請求書フォルダの最新PDFリストと会計簿データを照合します。<br>
+      新しいPDFが見つかれば登録を提案、削除されたPDFは警告します。
+    </div>
+    <button onclick="checkFileSync()" style="width:100%;padding:12px;background:#0EA5E9;color:#fff;border:none;border-radius:10px;font-size:15px;font-weight:600;cursor:pointer;">🔍 今すぐ照合チェック</button>
+    <div id="file-sync-result" style="margin-top:10px;display:none;"></div>
+  </div>
+
   <!-- バックアップ -->
   <div class="section-hdr" style="margin-top:12px">データ管理</div>
   <button class="btn-export" onclick="exportJSON()">💾 バックアップ（JSON）</button>
@@ -559,6 +571,23 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue','Hiragino San
   </div>
 </div>
 
+<!-- 仮置きレシート 照合モーダル -->
+<div id="pending-match-overlay" style="display:none;position:fixed;inset:0;z-index:800;background:rgba(0,0,0,0.6);align-items:flex-end;">
+  <div style="background:#fff;border-radius:24px 24px 0 0;width:100%;max-width:600px;margin:0 auto;max-height:85vh;display:flex;flex-direction:column;">
+    <div style="padding:20px 20px 0;flex-shrink:0;">
+      <div style="width:36px;height:4px;background:#ddd;border-radius:2px;margin:0 auto 14px;"></div>
+      <div style="font-size:17px;font-weight:700;margin-bottom:4px;">📎 明細に写真を割り当て</div>
+      <div style="font-size:13px;color:#888;margin-bottom:12px">金額・店名が一致する明細を選んでください</div>
+      <img id="pending-match-img" src="" style="width:100%;max-height:160px;object-fit:contain;border-radius:10px;background:#f5f5f0;margin-bottom:12px;">
+      <div id="pending-match-memo" style="font-size:13px;color:#52514e;margin-bottom:8px;"></div>
+    </div>
+    <div id="pending-match-list" style="overflow-y:auto;flex:1;padding:0 16px;"></div>
+    <div style="padding:12px 16px;flex-shrink:0;">
+      <button onclick="closePendingMatch()" style="width:100%;padding:13px;background:#f5f5f0;color:#333;border:none;border-radius:12px;font-size:15px;cursor:pointer;">キャンセル</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -749,7 +778,7 @@ function showPage(name) {
   if (name === 'dashboard') renderDashboard();
   if (name === 'kyuyo') initKyuyoPage();
   if (name === 'uriage') renderUriagePage();
-  if (name === 'credit') renderCreditPage();
+  if (name === 'credit') { renderCreditPage(); renderPendingReceipts(); }
 }
 
 // ===== DASHBOARD =====
@@ -981,9 +1010,12 @@ function renderList(type) {
     const photoBtn = hasPhoto ? `<button onclick="event.stopPropagation();viewPhoto('${type}',${r['No.']})" style="padding:3px 8px;background:#FFF3E0;color:#E65100;border:none;border-radius:6px;font-size:12px;cursor:pointer;margin-left:6px;">📷 写真</button>` : '';
     const srMatches = type === 'ryoshu' ? findSmartReceipt(r['日付'], r['金額（税込）']) : [];
     const srBtn = srMatches.length > 0 ? `<button onclick="event.stopPropagation();viewSmartReceipt('${r['日付']}',${r['金額（税込）']})" style="padding:3px 8px;background:#E8F5E9;color:#2E7D32;border:none;border-radius:6px;font-size:12px;cursor:pointer;margin-left:6px;">🧾 明細</button>` : '';
+    // ⑨ 外部領収書取得ボタン（閲覧のみ／購入・変更・設定変更は一切行わない）
+    const webReceiptUrl = type === 'ryoshu' ? getReceiptSiteUrl(r['店舗・支払先'] || '') : null;
+    const webReceiptBtn = webReceiptUrl ? `<button onclick="event.stopPropagation();openReceiptSite('${webReceiptUrl}')" style="padding:3px 8px;background:#F3E8FF;color:#7E22CE;border:none;border-radius:6px;font-size:12px;cursor:pointer;margin-left:6px;">🌐 領収書</button>` : '';
     return `<div class="entry" onclick="showDetail('${type}',${data.indexOf(r)})">
       <div class="entry-top"><span class="entry-name">${name||''}</span><span class="entry-amount">${fmt(r['金額（税込）'])}</span></div>
-      <div class="entry-sub">${r['日付']||''} · ${r['支払方法']||''} · ${sub||''} ${badge}${pdfBtn}${photoBtn}${srBtn}</div>
+      <div class="entry-sub">${r['日付']||''} · ${r['支払方法']||''} · ${sub||''} ${badge}${pdfBtn}${photoBtn}${srBtn}${webReceiptBtn}</div>
     </div>`;
   }).join('');
 }
@@ -2803,6 +2835,293 @@ function saveUriageCheck(idx, field, val) {
 // ===== CREDIT CARD =====
 let creditData = {}; // { 'YYYY-MM': [ {date, content, amount, ...} ] }
 
+// ===== ④ 仮置きレシート =====
+function getPendingReceipts() {
+  try { return JSON.parse(localStorage.getItem('furue_pending_receipts') || '[]'); } catch { return []; }
+}
+function savePendingReceipts(data) {
+  try { localStorage.setItem('furue_pending_receipts', JSON.stringify(data)); } catch {}
+}
+
+function addPendingReceipt(input) {
+  const files = Array.from(input.files || []);
+  if (!files.length) return;
+  files.forEach(file => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const pending = getPendingReceipts();
+      const newItem = {
+        id: Date.now() + '_' + Math.random().toString(36).slice(2),
+        photo: e.target.result,
+        storeName: '',
+        amount: '',
+        memo: '',
+        createdAt: new Date().toLocaleDateString('ja-JP')
+      };
+      pending.push(newItem);
+      savePendingReceipts(pending);
+      renderPendingReceipts();
+      showToast('📸 仮置きに追加しました');
+    };
+    reader.readAsDataURL(file);
+  });
+  input.value = '';
+}
+
+function renderPendingReceipts() {
+  const pending = getPendingReceipts();
+  const el = document.getElementById('pending-receipts-list');
+  const badge = document.getElementById('pending-count-badge');
+  if (!el) return;
+  if (badge) {
+    badge.style.display = pending.length ? 'inline-block' : 'none';
+    badge.textContent = pending.length + '件';
+  }
+  if (!pending.length) {
+    el.innerHTML = '<div style="text-align:center;padding:10px;font-size:13px;color:#bbb;">仮置き中のレシートはありません</div>';
+    return;
+  }
+  el.innerHTML = pending.map((p, idx) => `
+    <div style="background:#fff;border-radius:12px;border:1px solid #f0ddd0;margin-bottom:10px;overflow:hidden;">
+      <div style="display:flex;gap:10px;padding:10px;">
+        <img src="${p.photo}" style="width:70px;height:70px;object-fit:cover;border-radius:8px;flex-shrink:0;cursor:pointer" onclick="viewPendingPhoto('${p.id}')">
+        <div style="flex:1;min-width:0">
+          <input type="text" placeholder="店名" value="${p.storeName || ''}" oninput="updatePendingField('${p.id}','storeName',this.value)"
+            style="width:100%;border:1px solid #e0ddd0;border-radius:7px;padding:6px 9px;font-size:14px;margin-bottom:5px;box-sizing:border-box">
+          <div style="display:flex;gap:6px">
+            <input type="number" placeholder="金額" value="${p.amount || ''}" oninput="updatePendingField('${p.id}','amount',this.value)"
+              style="flex:1;border:1px solid #e0ddd0;border-radius:7px;padding:6px 9px;font-size:14px;box-sizing:border-box">
+            <input type="text" placeholder="メモ" value="${p.memo || ''}" oninput="updatePendingField('${p.id}','memo',this.value)"
+              style="flex:1;border:1px solid #e0ddd0;border-radius:7px;padding:6px 9px;font-size:14px;box-sizing:border-box">
+          </div>
+          <div style="font-size:11px;color:#bbb;margin-top:4px">追加日：${p.createdAt}</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:0;border-top:1px solid #f0ddd0;">
+        <button onclick="openPendingMatch('${p.id}')" style="flex:1;padding:11px;background:none;border:none;border-right:1px solid #f0ddd0;color:var(--accent);font-size:14px;font-weight:600;cursor:pointer;">💳 明細に割り当て</button>
+        <button onclick="deletePendingReceipt('${p.id}')" style="padding:11px 18px;background:none;border:none;color:#dc2626;font-size:14px;cursor:pointer;">🗑</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function updatePendingField(id, field, value) {
+  const pending = getPendingReceipts();
+  const item = pending.find(p => p.id === id);
+  if (item) { item[field] = value; savePendingReceipts(pending); }
+}
+
+function deletePendingReceipt(id) {
+  if (!confirm('この仮置きレシートを削除しますか？')) return;
+  const pending = getPendingReceipts().filter(p => p.id !== id);
+  savePendingReceipts(pending);
+  renderPendingReceipts();
+}
+
+function viewPendingPhoto(id) {
+  const item = getPendingReceipts().find(p => p.id === id);
+  if (!item) return;
+  const overlay = document.getElementById('photo-viewer-overlay');
+  if (overlay) {
+    document.getElementById('photo-viewer-img').src = item.photo;
+    overlay.style.display = 'flex';
+  }
+}
+
+let _pendingMatchId = null;
+function openPendingMatch(id) {
+  _pendingMatchId = id;
+  const item = getPendingReceipts().find(p => p.id === id);
+  if (!item) return;
+  document.getElementById('pending-match-img').src = item.photo;
+  const memoText = [item.storeName, item.amount ? '¥'+Number(item.amount).toLocaleString() : '', item.memo].filter(Boolean).join('　');
+  document.getElementById('pending-match-memo').textContent = memoText;
+
+  // ryoshuDataから候補を絞る（金額±20%または店名部分一致）
+  const amt = Number(item.amount) || 0;
+  const store = (item.storeName || '').replace(/\s/g,'');
+  const candidates = ryoshuData.filter(r => {
+    if (typeof r['No.'] !== 'number') return false;
+    const rAmt = Number(r['金額（税込）']) || 0;
+    const rStore = (r['店舗・支払先'] || '').replace(/\s/g,'');
+    const amtMatch = amt > 0 && Math.abs(rAmt - amt) / Math.max(amt, 1) < 0.2;
+    const storeMatch = store.length >= 2 && rStore.includes(store);
+    return amtMatch || storeMatch;
+  });
+  const all = candidates.length ? candidates : ryoshuData.filter(r => typeof r['No.'] === 'number');
+
+  const listEl = document.getElementById('pending-match-list');
+  listEl.innerHTML = all.map(r => `
+    <div style="padding:12px;border-bottom:1px solid #f0f0f0;display:flex;justify-content:space-between;align-items:center;gap:8px;cursor:pointer" onclick="assignPendingToEntry('${id}',${r['No.']})">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:15px;font-weight:600;color:var(--text);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${r['店舗・支払先']||''}</div>
+        <div style="font-size:13px;color:var(--text3)">${r['日付']||''} · ${r['支払方法']||''}</div>
+      </div>
+      <div style="font-size:16px;font-weight:700;color:var(--primary-2);white-space:nowrap">¥${(Number(r['金額（税込）'])||0).toLocaleString()}</div>
+    </div>
+  `).join('');
+
+  const overlay = document.getElementById('pending-match-overlay');
+  overlay.style.display = 'flex';
+}
+
+function closePendingMatch() {
+  document.getElementById('pending-match-overlay').style.display = 'none';
+  _pendingMatchId = null;
+}
+
+function assignPendingToEntry(pendingId, entryNo) {
+  const item = getPendingReceipts().find(p => p.id === pendingId);
+  if (!item) return;
+  // エントリの写真として保存
+  const photos = getLocalPhotos();
+  photos[String(entryNo)] = item.photo;
+  try { localStorage.setItem('furue_photos', JSON.stringify(photos)); } catch {}
+  // ryoshuDataを更新
+  const rec = ryoshuData.find(r => r['No.'] === entryNo);
+  if (rec) rec.photo = item.photo;
+  // 仮置きから削除
+  const pending = getPendingReceipts().filter(p => p.id !== pendingId);
+  savePendingReceipts(pending);
+  closePendingMatch();
+  renderPendingReceipts();
+  renderList('ryoshu');
+  showToast('✅ レシート写真を割り当てました');
+}
+
+// ===== ⑨ 外部サイト 領収書取得ボタン =====
+// 【重要制約】このコードはモノタロウ・Amazon・じゃらんの
+// 領収書・請求書ページへの「閲覧誘導」のみを目的とします。
+// 購入・注文変更・設定変更・その他いかなる操作も行いません。
+// IMPORTANT: This code ONLY navigates users to receipt/invoice pages
+// of MonotaRou, Amazon, and Jalan. NO purchasing, ordering, modification,
+// or settings changes are performed under any circumstances.
+const RECEIPT_SITE_MAP = [
+  {
+    // モノタロウ：注文履歴から領収書発行
+    keywords: ['モノタロウ', 'monotaro', 'Monotaro'],
+    url: 'https://www.monotaro.com/s/account/order/',
+    label: '🌐 モノタロウ 領収書'
+  },
+  {
+    // Amazon：注文履歴から領収書・請求書ダウンロード
+    keywords: ['amazon', 'Amazon', 'アマゾン'],
+    url: 'https://www.amazon.co.jp/gp/css/order-history',
+    label: '🌐 Amazon 領収書'
+  },
+  {
+    // じゃらん：予約履歴から領収書確認
+    keywords: ['じゃらん', 'jalan', 'Jalan'],
+    url: 'https://www.jalan.net/uw/uwp3000/uww3001.do',
+    label: '🌐 じゃらん 領収書'
+  }
+];
+
+function getReceiptSiteUrl(storeName) {
+  if (!storeName) return null;
+  const lower = storeName.toLowerCase();
+  for (const rule of RECEIPT_SITE_MAP) {
+    if (rule.keywords.some(k => lower.includes(k.toLowerCase()))) {
+      return rule.url;
+    }
+  }
+  return null;
+}
+
+function openReceiptSite(url) {
+  // 領収書閲覧ページを新規タブで開く（閲覧のみ。購入・変更操作は行わない）
+  window.open(url, '_blank', 'noopener,noreferrer');
+  showToast('🌐 領収書ページを開きました。PDFで保存し総務フォルダに保管してください');
+}
+
+// ===== ③⑤ ファイル同期チェック =====
+const KNOWN_SHIIRE_PDFS = [
+  'BK ALPHA請求2605.pdf','BK ALPHA請求2606.pdf',
+  'アイアール(警備)請求2601.pdf','アイアール請求2606.pdf',
+  'クロミヤ請求2601.pdf','クロミヤ請求2602.pdf','クロミヤ請求2604.pdf','クロミヤ請求2605.pdf','クロミヤ請求2606.pdf','クロミヤ請求2607.pdf',
+  '㈱イトウ請求2601.pdf','㈱イトウ請求2602.pdf','㈱イトウ請求2604.pdf','㈱イトウ請求2605.pdf','㈱イトウ請求2606.pdf','㈱イトウ請求2607.pdf',
+  '三浦工業請求2604.pdf','三浦工業請求2606.pdf',
+  '三浦請求2602.pdf','三浦請求2603.pdf','三浦請求2605.pdf',
+  '上田電気請求2607.pdf',
+  '太陽建機請求2602.pdf','太陽建機請求2606.pdf',
+  '松原請求2604.pdf','松岡商店請求2606.pdf',
+  '田中機請求2607.pdf',
+  '石原機械2603期末請求.pdf','石原機械請求2601.pdf','石原機械請求2603.pdf','石原機械請求2604.pdf','石原機械請求2607.pdf','石原請求2602.pdf',
+  '米津請求2601.pdf',
+  '美濃屋建築請求2607.pdf',
+  '長島運輸請求2602.pdf','長島運輸請求2604.pdf',
+  '黒宮請求2603.pdf'
+];
+
+function checkFileSync() {
+  const resultEl = document.getElementById('file-sync-result');
+  resultEl.style.display = 'block';
+
+  // shiireDataに登録済みのPDFリスト
+  const registered = new Set(shiireData.map(r => r['原紙PDF']).filter(Boolean));
+
+  // フォルダにあるがDB未登録
+  const newPdfs = KNOWN_SHIIRE_PDFS.filter(f => !registered.has(f));
+  // DBにあるがフォルダにない（削除された可能性）
+  const missingPdfs = [...registered].filter(f => !KNOWN_SHIIRE_PDFS.includes(f));
+
+  let html = '';
+  if (!newPdfs.length && !missingPdfs.length) {
+    html = '<div style="padding:12px;background:#dcfce7;border-radius:10px;color:#15803d;font-size:14px;font-weight:500;">✅ すべて同期済みです</div>';
+  } else {
+    if (newPdfs.length) {
+      html += `<div style="margin-bottom:10px">
+        <div style="font-size:14px;font-weight:600;color:#0369A1;margin-bottom:6px">🆕 フォルダに新着（会計簿未登録）：${newPdfs.length}件</div>
+        ${newPdfs.map(f => `
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:#EFF6FF;border-radius:8px;margin-bottom:4px;font-size:13px;">
+            <span>📄 ${f}</span>
+            <button onclick="promptRegisterShiirePdf('${f.replace(/'/g,"\\'")}',this)" style="background:#0EA5E9;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:12px;cursor:pointer;white-space:nowrap;">＋登録</button>
+          </div>
+        `).join('')}
+      </div>`;
+    }
+    if (missingPdfs.length) {
+      html += `<div>
+        <div style="font-size:14px;font-weight:600;color:#b45309;margin-bottom:6px">⚠️ フォルダから削除された可能性：${missingPdfs.length}件</div>
+        ${missingPdfs.map(f => `<div style="padding:8px 10px;background:#FEF3C7;border-radius:8px;margin-bottom:4px;font-size:13px;">📋 ${f}</div>`).join('')}
+      </div>`;
+    }
+  }
+  resultEl.innerHTML = html;
+}
+
+function promptRegisterShiirePdf(pdfName, btn) {
+  // ファイル名から月を推定（例: 田中機請求2607.pdf → 2026/07）
+  const m = pdfName.match(/(\d{4})\.pdf/);
+  const ym = m ? '20' + m[1].slice(0,2) + '/' + m[1].slice(2,4) : '';
+  // 請求元を推定
+  const suppMatch = pdfName.replace(/請求\d+\.pdf/, '').replace(/[㈱㈲]/g, '');
+  const detail = prompt(`「${pdfName}」を仕入として登録します。\n\n請求元を入力してください：`, suppMatch);
+  if (!detail) return;
+  const amtStr = prompt('金額（税込）を入力：', '');
+  if (!amtStr || isNaN(Number(amtStr))) { showToast('金額が正しくありません'); return; }
+
+  const maxNo = shiireData.filter(r=>typeof r['No.']===('number'||'string')).reduce((m,r)=>typeof r['No.']==='number'?Math.max(m,r['No.']):m,0);
+  const newRec = {
+    'No.': maxNo + 1,
+    '日付': ym ? ym + '/20' : '',
+    '請求元': detail,
+    '件名': pdfName.replace(/\.pdf$/, ''),
+    '金額（税込）': Number(amtStr),
+    '支払方法': '振込',
+    '勘定科目（参考）': '仕入',
+    '備考': null,
+    '原紙PDF': pdfName,
+    'インボイス番号': ''
+  };
+  shiireData.push(newRec);
+  saveData('shiire', shiireData);
+  btn.textContent = '✅ 登録済み';
+  btn.disabled = true;
+  btn.style.background = '#22c55e';
+  showToast('✅ ' + pdfName + ' を登録しました');
+}
+
 function renderCreditPage() {
   // ---- 0. レシート照合テーブルを構築（日付+金額でマッチング）----
   const receiptLookup = {}; // "YYYY/MM/DD_AMOUNT" → [{r, idx}, ...]
@@ -3171,6 +3490,28 @@ function importCreditCSV(input) {
 <!-- クレジットカード -->
 <div id="page-credit" class="page">
   <div class="summary" id="summary-credit"></div>
+
+  <!-- ④ 仮置きレシート -->
+  <div style="background:#FFF8F0;border:1.5px solid var(--accent);border-radius:16px;padding:16px;margin-bottom:14px;">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+      <div style="font-size:15px;font-weight:700;color:var(--accent)">📸 クレジットレシート仮置き</div>
+      <span id="pending-count-badge" style="background:var(--accent);color:#fff;font-size:12px;font-weight:600;padding:2px 10px;border-radius:12px;display:none">0件</span>
+    </div>
+    <div style="font-size:13px;color:#7a5030;margin-bottom:10px;line-height:1.6">レシート写真を先に保管→月次明細が届いたら照合して紐付けられます</div>
+    <div style="display:flex;gap:8px;margin-bottom:10px">
+      <label for="pending-receipt-camera" style="flex:1;background:var(--accent);color:#fff;border-radius:10px;padding:11px;text-align:center;font-size:14px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        カメラ
+      </label>
+      <input type="file" id="pending-receipt-camera" accept="image/*" capture="environment" style="display:none" onchange="addPendingReceipt(this)">
+      <label for="pending-receipt-lib" style="flex:1;background:#fff;color:var(--accent);border:1.5px solid var(--accent);border-radius:10px;padding:11px;text-align:center;font-size:14px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">
+        🖼 ライブラリ
+      </label>
+      <input type="file" id="pending-receipt-lib" accept="image/*" multiple style="display:none" onchange="addPendingReceipt(this)">
+    </div>
+    <div id="pending-receipts-list"></div>
+  </div>
+
   <div class="section-hdr">クレジットカード 月別集計</div>
 
   <!-- 月別サマリー -->

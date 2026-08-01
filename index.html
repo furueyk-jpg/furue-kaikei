@@ -903,6 +903,7 @@ function saveEdit(type, idx) {
     renderList(newType);
     if (document.getElementById('page-credit').classList.contains('active')) renderCreditPage();
     showToast((newType==='ryoshu' ? 'クレジット' : '現金') + '領収書に振り替えました');
+    if (newType === 'cash_ryoshu') { setTimeout(() => showPage('cash_ryoshu'), 400); }
   } else {
     saveData(type, data);
     renderList(type);
@@ -2311,19 +2312,19 @@ function renderCreditPage() {
         const firstWithPhoto = matches.find(m=>m.r.photo) || matches[0];
         receiptBtns = `<button onclick="event.stopPropagation();showPhoto('ryoshu',${firstWithPhoto.idx})" style="font-size:11px;padding:2px 7px;background:#d7f3e8;color:#1a7a4a;border:none;border-radius:5px;cursor:pointer" title="${matches.length}件一致">📷×${matches.length}</button>`;
       }
-      // モノタロウ等の仕入れ照合（ryoshuにない場合はshiireDataを検索）
+      // モノタロウ等の照合（クレジット領収書のMonotaRU分を金額近似でマッチング）
       if (!receiptBtns) {
         const cContent = (c.content || '').toLowerCase();
-        const shiireMatch = (shiireData || []).find(s => {
-          if (!s['原紙PDF']) return false;
-          const sName = ((s['請求元']||'') + (s['件名']||'')).toLowerCase();
-          const sDate = (s['日付']||'').replace(/-/g,'/');
-          const amtClose = Math.abs(Number(s['金額（税込）']) - Number(c.amount)) <= 100;
-          const nameMatch = (cContent.includes('モノタロウ') && sName.includes('モノタロウ'));
-          return nameMatch && amtClose;
-        });
-        if (shiireMatch) {
-          receiptBtns = `<button onclick="event.stopPropagation();openInvoicePDF('${shiireMatch['原紙PDF'].replace(/'/g,"\\'")}');" style="font-size:11px;padding:2px 7px;background:#FFE0B2;color:#E65100;border:none;border-radius:5px;cursor:pointer" title="モノタロウ仕入れ領収書">📄 仕入</button>`;
+        if (cContent.includes('モノタロウ') || cContent.includes('monotaro')) {
+          const monotaroMatch = (ryoshuData || []).find(s => {
+            if (!s['原紙PDF']) return false;
+            const sName = (s['店舗・支払先'] || '').toLowerCase();
+            const amtClose = Math.abs(Number(s['金額（税込）']) - Number(c.amount)) <= 500;
+            return sName.includes('モノタロウ') && amtClose;
+          });
+          if (monotaroMatch) {
+            receiptBtns = `<button onclick="event.stopPropagation();openReceiptPDF('${monotaroMatch['原紙PDF'].replace(/'/g,"\'")}',${monotaroMatch['No_']||monotaroMatch['No.']||''});" style="font-size:11px;padding:2px 7px;background:#E6F1FB;color:#185FA5;border:none;border-radius:5px;cursor:pointer" title="モノタロウ領収書">📄 領収書</button>`;
+          }
         }
       }
       return `<tr style="border-bottom:1px solid #f0eeea;background:#FFFDE7">
@@ -2405,58 +2406,13 @@ function renderCreditPage() {
     </div>`;
   });
 
-  // ---- モノタロウクレジット払いセクション（クレジット領収書のモノタロウ分） ----
-  const monotaroCredit = (ryoshuData || []).filter(r => (r['店舗・支払先'] || '').includes('モノタロウ'));
-  if (monotaroCredit.length > 0) {
-    const monotaroByMonth = {};
-    monotaroCredit.forEach(r => {
-      if (!r['日付']) return;
-      const ym = r['日付'].slice(0,7).replace('/','-');
-      if (!monotaroByMonth[ym]) monotaroByMonth[ym] = { amount: 0, rows: [] };
-      monotaroByMonth[ym].amount += Number(r['金額（税込）']) || 0;
-      monotaroByMonth[ym].rows.push(r);
-    });
-    Object.keys(monotaroByMonth).sort().reverse().forEach(ym => {
-      const [y, mo] = ym.split('-');
-      const sm = monotaroByMonth[ym];
-      const rowsHtml = sm.rows.map(r => {
-        const rIdx = ryoshuData.indexOf(r);
-        const pdfBtn = r['原紙PDF']
-          ? `<button onclick="event.stopPropagation();openReceiptPDF('${r['原紙PDF'].replace(/'/g,"\\'")}',${r['No_']||r['No.']||''});" style="font-size:11px;padding:2px 7px;background:#E6F1FB;color:#185FA5;border:none;border-radius:5px;cursor:pointer" title="PDF">📄</button>`
-          : '<span style="color:#ccc;font-size:10px">-</span>';
-        return `<tr style="border-bottom:1px solid #f0eeea;cursor:pointer;background:#FFF8F0" onclick="showDetail('ryoshu',${rIdx})">
-          <td style="padding:5px 4px;font-size:12px;color:#52514e">${r['日付']||''}</td>
-          <td style="padding:5px 4px;font-size:12px;max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r['店舗・支払先']||''}</td>
-          <td style="padding:5px 4px;font-size:11px;color:#666;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r['内容']||''}</td>
-          <td style="padding:5px 4px;font-size:12px;text-align:right;color:#E65100;font-weight:600">¥${(Number(r['金額（税込）'])||0).toLocaleString()}</td>
-          <td style="padding:5px 4px;font-size:12px;text-align:center">${pdfBtn}</td>
-        </tr>`;
-      }).join('');
-      html += `<div class="form-card" style="padding:0;margin-bottom:10px;overflow:hidden">
-        <div style="background:#FFE0B2;padding:10px 14px;display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="toggleCreditMonth('s${ym}')">
-          <span style="font-weight:600;font-size:14px;color:#E65100">🛒 ${y}年${mo}月 モノタロウクレジット払い</span>
-          <div>
-            <span style="font-size:13px;color:#E65100;font-weight:700">¥${sm.amount.toLocaleString()}</span>
-            <span style="font-size:12px;color:#555;margin-left:8px">${sm.rows.length}件</span>
-          </div>
-        </div>
-        <div id="credit-month-s${ym}" style="display:none">
-          <table style="width:100%;border-collapse:collapse">
-            <thead><tr style="background:#f5f4f2">
-              <th style="padding:5px 4px;font-size:11px;text-align:left;color:#898781;font-weight:500">日付</th>
-              <th style="padding:5px 4px;font-size:11px;text-align:left;color:#898781;font-weight:500">店舗・支払先</th>
-              <th style="padding:5px 4px;font-size:11px;text-align:left;color:#898781;font-weight:500">内容</th>
-              <th style="padding:5px 4px;font-size:11px;text-align:right;color:#898781;font-weight:500">金額</th>
-              <th style="padding:5px 4px;font-size:11px;text-align:center;color:#898781;font-weight:500">領収書</th>
-            </tr></thead>
-            <tbody>${rowsHtml}</tbody>
-          </table>
-        </div>
-      </div>`;
-    });
-  }
+    document.getElementById('credit-monthly-list').innerHTML = html;
 
-  document.getElementById('credit-monthly-list').innerHTMLnnerHTML = html;
+  // 現在月のカードを自動展開
+  const now = new Date();
+  const curYm = now.getFullYear()+'-'+String(now.getMonth()+1).padStart(2,'0');
+  const curEl = document.getElementById('credit-month-'+curYm);
+  if (curEl) curEl.style.display = 'block';
 }
 
 function toggleCreditMonth(ym) {

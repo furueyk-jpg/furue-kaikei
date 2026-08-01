@@ -734,7 +734,7 @@ function renderDashboard() {
   const months=['4月','5月','6月','7月','8月','9月','10月','11月','12月','1月','2月','3月'];
   const uriageByMonth = {};
   uriageData.forEach(r => {
-    const m = (r['日付']||'').replace(/\//g,'').slice(0,6);
+    const m = (r['日付']||'').replace(/[\/\-]/g,'').slice(0,6);
     if (m) uriageByMonth[m] = (uriageByMonth[m]||0) + (Number(r['金額（税別）'])||0);
   });
   const uriage = monthKeys.map(m => uriageByMonth[m]||0);
@@ -746,7 +746,7 @@ function renderDashboard() {
   // 仕入月別
   const shiireByMonth = {};
   shiireData.forEach(r => {
-    const m = (r['日付']||'').replace(/\//g,'').slice(0,6);
+    const m = (r['日付']||'').replace(/[\/\-]/g,'').slice(0,6);
     if (m) shiireByMonth[m] = (shiireByMonth[m]||0) + (Number(r['金額（税込）'])||0);
   });
   const shiireM = monthKeys.map(m => shiireByMonth[m]||0);
@@ -776,7 +776,7 @@ function renderDashboard() {
   // 現金領収書月別（cashRyoshuDataから）
   const cashByMonth = {};
   (cashRyoshuData||[]).forEach(r => {
-    const m = (r['日付']||'').replace(/\//g,'').slice(0,6);
+    const m = (r['日付']||'').replace(/[\/\-]/g,'').slice(0,6);
     if (m) cashByMonth[m] = (cashByMonth[m]||0) + (Number(r['金額（税込）'])||0);
   });
   const cashM = monthKeys.map(m => cashByMonth[m]||0);
@@ -885,7 +885,7 @@ function populateMonthFilter(type, data) {
   const currentYm = now.getFullYear() + String(now.getMonth()+1).padStart(2,'0');
   const months = [...new Set(data.map(r => {
     const d = r['日付'] || '';
-    return d.replace(/\//g,'').slice(0,6);
+    return d.replace(/[\/\-]/g,'').slice(0,6);
   }).filter(m => m.length === 6 && /^\d{6}$/.test(m) && m <= currentYm))].sort();
   // 初回表示時（sel.valueが空）は当月をデフォルト選択、なければ最新月
   const cur = sel.value || (months.includes(currentYm) ? currentYm : (months.length > 0 ? months[months.length-1] : ''));
@@ -900,7 +900,7 @@ function renderList(type) {
   const monthFilter = (document.getElementById(type+'-month-filter')||{}).value || '';
   const q = document.getElementById('search-'+type).value.toLowerCase();
   let filtered = monthFilter
-    ? data.filter(r => (r['日付']||'').replace(/\//g,'').slice(0,6) === monthFilter)
+    ? data.filter(r => (r['日付']||'').replace(/[\/\-]/g,'').slice(0,6) === monthFilter)
     : data;
   filtered = q ? filtered.filter(r => {
     const s = type==='ryoshu' ? r['店舗・支払先'] : r['請求元'];
@@ -1737,9 +1737,10 @@ function addEntry() {
     entry['内容'] = document.getElementById('f-content').value;
   }
   // 写真があれば原紙として保存（ローカルのみ）
-  if (!isShiire && !isCashRyoshu && currentPhotoBase64) {
+  if (!isShiire && currentPhotoBase64) {
     entry['photo'] = currentPhotoBase64;
-    saveLocalPhoto(newNo, currentPhotoBase64);
+    const photoKey = isCashRyoshu ? 'c' + newNo : newNo;
+    saveLocalPhoto(photoKey, currentPhotoBase64);
     currentPhotoBase64 = null;
     document.getElementById('photo-preview').style.display = 'none';
     document.getElementById('photo-input').value = '';
@@ -2378,7 +2379,7 @@ function renderUriagePage() {
   if (sel) {
     const now = new Date();
     const currentYm = now.getFullYear() + String(now.getMonth()+1).padStart(2,'0');
-    const months = [...new Set(uriageData.map(r => (r['日付']||'').replace(/\//g,'').slice(0,6)).filter(m => m.length===6 && /^\d{6}$/.test(m) && m <= currentYm))].sort();
+    const months = [...new Set(uriageData.map(r => (r['日付']||'').replace(/[\/\-]/g,'').slice(0,6)).filter(m => m.length===6 && /^\d{6}$/.test(m) && m <= currentYm))].sort();
     const cur = sel.value || (months.includes(currentYm) ? currentYm : (months.length > 0 ? months[months.length-1] : ''));
     sel.innerHTML = '<option value="">全月</option>' + months.map(m =>
       `<option value="${m}"${m===cur?' selected':''}>${m.slice(0,4)}年${Number(m.slice(4))}月</option>`
@@ -2386,7 +2387,7 @@ function renderUriagePage() {
   }
   const filter = document.getElementById('uriage-month-filter').value; // e.g. "202604" or ""
   const rows = filter
-    ? uriageData.filter(r => r['日付'] && r['日付'].replace(/\//g,'').slice(0,6) === filter)
+    ? uriageData.filter(r => r['日付'] && r['日付'].replace(/[\/\-]/g,'').slice(0,6) === filter)
     : uriageData;
 
   // summary

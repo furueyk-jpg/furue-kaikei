@@ -625,7 +625,8 @@ function getLocalPhotos() {
 }
 function saveLocalPhoto(no, base64) {
   const p = getLocalPhotos(); p[String(no)] = base64;
-  try { localStorage.setItem('furue_photos', JSON.stringify(p)); } catch {}
+  try { localStorage.setItem('furue_photos', JSON.stringify(p)); }
+  catch(e) { showToast('⚠️ 写真保存失敗: 空き容量不足です'); }
 }
 
 // ===== FIREBASE KEY SANITIZER (Firebase doesn't allow '.' in keys) =====
@@ -1073,8 +1074,9 @@ function replacePhotoFromViewer(input) {
   const file = input.files[0];
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = e => {
-    const b64 = e.target.result.split(',')[1];
+  reader.onload = async e => {
+    const compressed = await compressImage(e.target.result);
+    const b64 = compressed.split(',')[1];
     const type = window.__viewPhotoType;
     const no = window.__viewPhotoNo;
     const key = type === 'cash_ryoshu' ? 'c' + no : String(no);
@@ -1960,13 +1962,30 @@ function exportCSV(type) {
 // ===== PHOTO OCR =====
 let currentPhotoBase64 = null;
 
+// 画像圧縮：iOSカメラ写真は大きいのでlocalStorage 5MB制限対策
+function compressImage(dataUrl, maxWidth=1200, quality=0.75) {
+  return new Promise(resolve => {
+    const img = new Image();
+    img.onload = () => {
+      let w = img.width, h = img.height;
+      if (w > maxWidth) { h = Math.round(h * maxWidth / w); w = maxWidth; }
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.src = dataUrl;
+  });
+}
+
 function handlePhoto(input) {
   const file = input.files[0];
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = e => {
-    currentPhotoBase64 = e.target.result.split(',')[1];
-    document.getElementById('preview-img').src = e.target.result;
+  reader.onload = async e => {
+    const compressed = await compressImage(e.target.result);
+    currentPhotoBase64 = compressed.split(',')[1];
+    document.getElementById('preview-img').src = compressed;
     document.getElementById('photo-preview').style.display = 'block';
     const savedKey = localStorage.getItem('furue_api_key');
     if (savedKey) {
@@ -1983,12 +2002,13 @@ function handleEditPhoto(input) {
   const file = input.files[0];
   if (!file) return;
   const reader = new FileReader();
-  reader.onload = e => {
-    window.__editPhotoBase64 = e.target.result.split(',')[1];
+  reader.onload = async e => {
+    const compressed = await compressImage(e.target.result);
+    window.__editPhotoBase64 = compressed.split(',')[1];
     window.__editPhotoClear = false;
     const prev = document.getElementById('edit-photo-preview');
     const img = document.getElementById('edit-preview-img');
-    if (prev && img) { img.src = e.target.result; prev.style.display = 'block'; }
+    if (prev && img) { img.src = compressed; prev.style.display = 'block'; }
   };
   reader.readAsDataURL(file);
 }
@@ -2840,7 +2860,13 @@ function getPendingReceipts() {
   try { return JSON.parse(localStorage.getItem('furue_pending_receipts') || '[]'); } catch { return []; }
 }
 function savePendingReceipts(data) {
-  try { localStorage.setItem('furue_pending_receipts', JSON.stringify(data)); } catch {}
+  try {
+    localStorage.setItem('furue_pending_receipts', JSON.stringify(data));
+    return true;
+  } catch(e) {
+    showToast('⚠️ 保存失敗: 空き容量不足です');
+    return false;
+  }
 }
 
 function addPendingReceipt(input) {
@@ -2848,20 +2874,22 @@ function addPendingReceipt(input) {
   if (!files.length) return;
   files.forEach(file => {
     const reader = new FileReader();
-    reader.onload = e => {
+    reader.onload = async e => {
+      const compressed = await compressImage(e.target.result);
       const pending = getPendingReceipts();
       const newItem = {
         id: Date.now() + '_' + Math.random().toString(36).slice(2),
-        photo: e.target.result,
+        photo: compressed,
         storeName: '',
         amount: '',
         memo: '',
         createdAt: new Date().toLocaleDateString('ja-JP')
       };
       pending.push(newItem);
-      savePendingReceipts(pending);
-      renderPendingReceipts();
-      showToast('📸 仮置きに追加しました');
+      if (savePendingReceipts(pending)) {
+        renderPendingReceipts();
+        showToast('📸 仮置きに追加しました');
+      }
     };
     reader.readAsDataURL(file);
   });

@@ -871,12 +871,17 @@ function saveEdit(type, idx) {
   const isRyoshu = type==='ryoshu' || type==='cash_ryoshu';
   const nameKey = isRyoshu ? '店舗・支払先' : '請求元';
   const contentKey = isRyoshu ? '内容' : '件名';
-  const newType = isRyoshu ? document.getElementById('edit-type').value : type;
+  const newPayment = document.getElementById('edit-payment').value;
+  let newType = isRyoshu ? document.getElementById('edit-type').value : type;
+  // 支払方法と種別を自動連動（クレジット→ryoshu、現金・他→cash_ryoshu）
+  if (isRyoshu) {
+    newType = (newPayment === 'クレジット') ? 'ryoshu' : 'cash_ryoshu';
+  }
   r['日付'] = document.getElementById('edit-date').value;
   r[nameKey] = document.getElementById('edit-name').value;
   r[contentKey] = document.getElementById('edit-content').value;
   r['金額（税込）'] = Number(document.getElementById('edit-amount').value) || 0;
-  r['支払方法'] = document.getElementById('edit-payment').value;
+  r['支払方法'] = newPayment;
   r['勘定科目（参考）'] = document.getElementById('edit-kanjou').value;
   r['インボイス番号'] = document.getElementById('edit-invoice').value.trim() || null;
   r['備考'] = document.getElementById('edit-memo').value || null;
@@ -2265,6 +2270,7 @@ function renderCreditPage() {
       return `<tr style="border-bottom:1px solid #f0eeea;cursor:pointer" onclick="showDetail('ryoshu',${rIdx})">
         <td style="padding:5px 4px;font-size:12px;color:#52514e">${r['日付']||''}</td>
         <td style="padding:5px 4px;font-size:12px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r['店舗・支払先']||r['件名']||''}</td>
+        <td style="padding:5px 4px;font-size:11px;color:#666;white-space:nowrap">${r['支払方法']||''}</td>
         <td style="padding:5px 4px;font-size:12px;text-align:right;color:#185FA5;font-weight:600">¥${(Number(r['金額（税込）'])||0).toLocaleString()}</td>
         <td style="padding:5px 4px;font-size:12px;text-align:center">${photoBtn}${pdfBtn}${noBtn}</td>
       </tr>`;
@@ -2311,6 +2317,7 @@ function renderCreditPage() {
           <thead><tr style="background:#f5f4f2">
             <th style="padding:5px 4px;font-size:11px;text-align:left;color:#898781;font-weight:500">日付</th>
             <th style="padding:5px 4px;font-size:11px;text-align:left;color:#898781;font-weight:500">内容</th>
+            <th style="padding:5px 4px;font-size:11px;text-align:left;color:#898781;font-weight:500">支払方法</th>
             <th style="padding:5px 4px;font-size:11px;text-align:right;color:#898781;font-weight:500">金額</th>
             <th style="padding:5px 4px;font-size:11px;text-align:center;color:#898781;font-weight:500">原紙</th>
           </tr></thead>

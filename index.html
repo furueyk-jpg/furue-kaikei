@@ -731,6 +731,10 @@ function renderDashboard() {
   });
   const uriage = monthKeys.map(m => uriageByMonth[m]||0);
 
+  // 当月以降の売上は非表示（未確定）
+  const nowYM = String(new Date().getFullYear()) + String(new Date().getMonth()+1).padStart(2,'0');
+  const uriageDisplay = monthKeys.map((m,i) => m > nowYM ? 0 : uriage[i]);
+
   // 仕入月別
   const shiireByMonth = {};
   shiireData.forEach(r => {
@@ -769,7 +773,7 @@ function renderDashboard() {
 
   const tiny = {responsive:true,maintainAspectRatio:false,plugins:{legend:{labels:{font:{size:10},boxWidth:10}},tooltip:{callbacks:{label:c=>'¥'+c.raw.toLocaleString()}}},scales:{x:{ticks:{font:{size:9}}},y:{ticks:{callback:v=>v>=1000000?'¥'+(v/1000000).toFixed(0)+'M':'¥'+(v/10000).toFixed(0)+'万',font:{size:9}},grid:{color:'rgba(0,0,0,0.04)'}}}};
 
-  mkChart('chart-uriage',{type:'bar',data:{labels:months,datasets:[{label:'売上（税別）',data:uriage,backgroundColor:'#2e7d32',borderRadius:3},{label:'仕入（税込）',data:shiireM,backgroundColor:'#EF9F27',borderRadius:3}]},options:tiny});
+  mkChart('chart-uriage',{type:'bar',data:{labels:months,datasets:[{label:'売上（税別）',data:uriageDisplay,backgroundColor:'#2e7d32',borderRadius:3},{label:'仕入（税込）',data:shiireM,backgroundColor:'#EF9F27',borderRadius:3}]},options:tiny});
   mkChart('chart-kyuyo',{type:'line',data:{labels:months,datasets:[{label:'給与',data:kyuyo,borderColor:'#A32D2D',backgroundColor:'rgba(163,45,45,0.1)',borderWidth:2,pointRadius:2,tension:0.3,fill:true}]},options:{...tiny,plugins:{...tiny.plugins,legend:{display:false}}}});
   const pieLabels = monthKeys.filter((_,i)=>shiireM[i]>0).map(m=>Number(m.slice(4))+'月');
   const pieData = shiireM.filter(v=>v>0);
@@ -780,7 +784,7 @@ function renderDashboard() {
   const fmt = v => v ? '¥'+v.toLocaleString() : '—';
   let totalU=0, totalR=0, totalS=0, totalK=0;
   let rows = monthKeys.map((m,i) => {
-    const u = uriage[i], r = ryoshuM[i], s = shiireM[i], k = kyuyo[i];
+    const u = uriageDisplay[i], r = ryoshuM[i], s = shiireM[i], k = kyuyo[i];
     const bal = u - r - s - k;
     totalU+=u; totalR+=r; totalS+=s; totalK+=k;
     const balColor = bal>=0 ? '#155724' : '#A32D2D';

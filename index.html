@@ -757,13 +757,21 @@ function renderDashboard() {
   const kyuyoFallback=[7810275,6927166,7217461,7364969,0,0,0,0,0,0,0,0];
   const kyuyo = monthKeys.map((m,i) => kyuyoByMonth[m] || kyuyoFallback[i]);
 
-  // 領収書月別
-  const ryoshuByMonth = {};
-  ryoshuData.forEach(r => {
-    const m = (r['日付']||'').replace(/\//g,'').slice(0,6);
-    if (m) ryoshuByMonth[m] = (ryoshuByMonth[m]||0) + (Number(r['金額（税込）'])||0);
+  // クレジット請求月別（creditDataから）
+  const creditByMonth = {};
+  Object.entries(creditData || {}).forEach(([ym, txs]) => {
+    const m = ym.replace('-',''); // "2026-04" → "202604"
+    creditByMonth[m] = (txs||[]).reduce((s,c) => s + (Number(c.amount)||0), 0);
   });
-  const ryoshuM = monthKeys.map(m => ryoshuByMonth[m]||0);
+  const creditM = monthKeys.map(m => creditByMonth[m]||0);
+
+  // 現金領収書月別（cashRyoshuDataから）
+  const cashByMonth = {};
+  (cashRyoshuData||[]).forEach(r => {
+    const m = (r['日付']||'').replace(/\//g,'').slice(0,6);
+    if (m) cashByMonth[m] = (cashByMonth[m]||0) + (Number(r['金額（税込）'])||0);
+  });
+  const cashM = monthKeys.map(m => cashByMonth[m]||0);
 
   function mkChart(id, cfg) {
     if (dashCharts[id]) { dashCharts[id].destroy(); }
@@ -782,47 +790,50 @@ function renderDashboard() {
 
   // ===== 月別集計詳細テーブル =====
   const fmt = v => v ? '¥'+v.toLocaleString() : '—';
-  let totalU=0, totalR=0, totalS=0, totalK=0;
+  let totalU=0, totalCr=0, totalCash=0, totalS=0, totalK=0;
   let rows = monthKeys.map((m,i) => {
-    const u = uriageDisplay[i], r = ryoshuM[i], s = shiireM[i], k = kyuyo[i];
-    const bal = u - r - s - k;
-    totalU+=u; totalR+=r; totalS+=s; totalK+=k;
+    const u = uriageDisplay[i], cr = creditM[i], cash = cashM[i], s = shiireM[i], k = kyuyo[i];
+    const bal = u - cr - cash - s - k;
+    totalU+=u; totalCr+=cr; totalCash+=cash; totalS+=s; totalK+=k;
     const balColor = bal>=0 ? '#155724' : '#A32D2D';
     return `<tr style="border-bottom:0.5px solid #eee">
-      <td style="padding:7px 8px;font-weight:500;white-space:nowrap">${months[i]}</td>
-      <td style="padding:7px 8px;text-align:right;color:#155724">${fmt(u)}</td>
-      <td style="padding:7px 8px;text-align:right;color:#185FA5">${fmt(r)}</td>
-      <td style="padding:7px 8px;text-align:right;color:#BA7517">${fmt(s)}</td>
-      <td style="padding:7px 8px;text-align:right;color:#A32D2D">${fmt(k)}</td>
-      <td style="padding:7px 8px;text-align:right;font-weight:600;color:${balColor}">${fmt(bal)}</td>
+      <td style="padding:7px 6px;font-weight:500;white-space:nowrap">${months[i]}</td>
+      <td style="padding:7px 6px;text-align:right;color:#155724">${fmt(u)}</td>
+      <td style="padding:7px 6px;text-align:right;color:#185FA5">${fmt(cr)}</td>
+      <td style="padding:7px 6px;text-align:right;color:#5B4FCF">${fmt(cash)}</td>
+      <td style="padding:7px 6px;text-align:right;color:#BA7517">${fmt(s)}</td>
+      <td style="padding:7px 6px;text-align:right;color:#A32D2D">${fmt(k)}</td>
+      <td style="padding:7px 6px;text-align:right;font-weight:600;color:${balColor}">${fmt(bal)}</td>
     </tr>`;
   }).join('');
-  const totalBal = totalU - totalR - totalS - totalK;
+  const totalBal = totalU - totalCr - totalCash - totalS - totalK;
   const totalBalColor = totalBal>=0 ? '#155724' : '#A32D2D';
   const tableEl = document.getElementById('dash-monthly-table');
   if (tableEl) tableEl.innerHTML = `
     <div style="font-size:13px;font-weight:600;color:#1B2C4E;margin-bottom:6px">月別集計詳細</div>
     <div style="overflow-x:auto;-webkit-overflow-scrolling:touch">
-    <table style="width:100%;border-collapse:collapse;font-size:12px;background:#fff;border-radius:10px;overflow:hidden;border:0.5px solid rgba(0,0,0,0.08)">
+    <table style="width:100%;border-collapse:collapse;font-size:11px;background:#fff;border-radius:10px;overflow:hidden;border:0.5px solid rgba(0,0,0,0.08)">
       <thead>
         <tr style="background:#1B2C4E;color:#fff">
-          <th style="padding:8px;text-align:left;font-weight:500">月</th>
-          <th style="padding:8px;text-align:right;font-weight:500">売上（税別）</th>
-          <th style="padding:8px;text-align:right;font-weight:500">領収書</th>
-          <th style="padding:8px;text-align:right;font-weight:500">仕入請求</th>
-          <th style="padding:8px;text-align:right;font-weight:500">給与</th>
-          <th style="padding:8px;text-align:right;font-weight:500">差引収支</th>
+          <th style="padding:7px 6px;text-align:left;font-weight:500">月</th>
+          <th style="padding:7px 6px;text-align:right;font-weight:500">売上（税別）</th>
+          <th style="padding:7px 6px;text-align:right;font-weight:500">クレジット</th>
+          <th style="padding:7px 6px;text-align:right;font-weight:500">現金領収書</th>
+          <th style="padding:7px 6px;text-align:right;font-weight:500">仕入請求</th>
+          <th style="padding:7px 6px;text-align:right;font-weight:500">給与</th>
+          <th style="padding:7px 6px;text-align:right;font-weight:500">差引収支</th>
         </tr>
       </thead>
       <tbody>${rows}</tbody>
       <tfoot>
         <tr style="background:#f5f5f5;font-weight:600">
-          <td style="padding:8px">合計</td>
-          <td style="padding:8px;text-align:right;color:#155724">${fmt(totalU)}</td>
-          <td style="padding:8px;text-align:right;color:#185FA5">${fmt(totalR)}</td>
-          <td style="padding:8px;text-align:right;color:#BA7517">${fmt(totalS)}</td>
-          <td style="padding:8px;text-align:right;color:#A32D2D">${fmt(totalK)}</td>
-          <td style="padding:8px;text-align:right;color:${totalBalColor}">${fmt(totalBal)}</td>
+          <td style="padding:7px 6px">合計</td>
+          <td style="padding:7px 6px;text-align:right;color:#155724">${fmt(totalU)}</td>
+          <td style="padding:7px 6px;text-align:right;color:#185FA5">${fmt(totalCr)}</td>
+          <td style="padding:7px 6px;text-align:right;color:#5B4FCF">${fmt(totalCash)}</td>
+          <td style="padding:7px 6px;text-align:right;color:#BA7517">${fmt(totalS)}</td>
+          <td style="padding:7px 6px;text-align:right;color:#A32D2D">${fmt(totalK)}</td>
+          <td style="padding:7px 6px;text-align:right;color:${totalBalColor}">${fmt(totalBal)}</td>
         </tr>
       </tfoot>
     </table></div>`;

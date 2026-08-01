@@ -244,6 +244,22 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue','Hiragino San
     </div>
   </div>
 
+  <!-- 一括登録ボタン -->
+  <div style="margin-bottom:14px">
+    <div style="font-size:12px;color:#898781;font-weight:500;margin-bottom:6px;text-align:center">── 複数まとめて登録 ──</div>
+    <div style="display:flex;gap:8px">
+      <label for="batch-photo-camera" style="flex:1;background:#2E7D32;color:#fff;border-radius:10px;padding:12px;text-align:center;font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">
+        📸 カメラで一括撮影
+      </label>
+      <input type="file" id="batch-photo-camera" accept="image/*" capture="environment" style="display:none" onchange="runBatchOCR(this)">
+      <label for="batch-photo-lib" style="flex:1;background:#fff;color:#2E7D32;border:1.5px solid #2E7D32;border-radius:10px;padding:12px;text-align:center;font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">
+        🖼 ライブラリから
+      </label>
+      <input type="file" id="batch-photo-lib" accept="image/*" style="display:none" onchange="runBatchOCR(this)">
+    </div>
+    <div style="font-size:11px;color:#898781;margin-top:5px;text-align:center">領収書を複数並べて1枚撮影 → AIが自動仕分け</div>
+  </div>
+
   <div class="form-card">
     <div class="form-row">
       <label>種別</label>
@@ -926,14 +942,27 @@ function renderList(type) {
     const pdfFn = (type==='ryoshu'||type==='cash_ryoshu') ? 'openReceiptPDF' : 'openInvoicePDF';
     const pdfNoArg = (type==='ryoshu'||type==='cash_ryoshu') ? `,${r['No_']||''}` : '';
     const pdfBtn = r['原紙PDF'] ? `<button onclick="event.stopPropagation();${pdfFn}('${r['原紙PDF'].replace(/'/g,"\\'")}' ${pdfNoArg});" style="padding:3px 8px;background:#E6F1FB;color:#185FA5;border:none;border-radius:6px;font-size:12px;cursor:pointer;margin-left:6px;">📄 原紙</button>` : '';
+    const photoBtn = r.photo ? `<button onclick="event.stopPropagation();viewPhoto('${type}',${r['No.']})" style="padding:3px 8px;background:#FFF3E0;color:#E65100;border:none;border-radius:6px;font-size:12px;cursor:pointer;margin-left:6px;">📷 写真</button>` : '';
     return `<div class="entry" onclick="showDetail('${type}',${data.indexOf(r)})">
       <div class="entry-top"><span class="entry-name">${name||''}</span><span class="entry-amount">${fmt(r['金額（税込）'])}</span></div>
-      <div class="entry-sub">${r['日付']||''} · ${r['支払方法']||''} · ${sub||''} ${badge}${pdfBtn}</div>
+      <div class="entry-sub">${r['日付']||''} · ${r['支払方法']||''} · ${sub||''} ${badge}${pdfBtn}${photoBtn}</div>
     </div>`;
   }).join('');
 }
 
 function filterList(type) { renderList(type); }
+
+function viewPhoto(type, no) {
+  const key = type === 'cash_ryoshu' ? 'c' + no : String(no);
+  const b64 = getLocalPhotos()[key];
+  if (!b64) { showToast('写真データが見つかりません'); return; }
+  document.getElementById('modal-title').textContent = '📷 写真領収書';
+  document.getElementById('modal-body').innerHTML = `
+    <img src="data:image/jpeg;base64,${b64}" style="width:100%;border-radius:10px;display:block">
+    <button onclick="document.getElementById('modal').classList.remove('open')" style="width:100%;padding:13px;background:#f7f5f1;border:none;border-radius:10px;font-size:15px;font-weight:500;cursor:pointer;margin-top:12px">閉じる</button>
+  `;
+  document.getElementById('modal').classList.add('open');
+}
 
 // ===== PDF ギャラリー（領収書・仕入請求書共用）=====
 function renderPdfGallery(type, pdfs) {
@@ -1839,6 +1868,103 @@ function clearEditPhoto() {
   window.__editPhotoClear = true;
   const prev = document.getElementById('edit-photo-preview');
   if (prev) prev.style.display = 'none';
+}
+
+// ===== 一括登録 =====
+function runBatchOCR(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const apiKey = localStorage.getItem('furue_api_key');
+  if (!apiKey) { showToast('APIキーが必要です。単票登録でAPIキーを先に設定してください'); input.value=''; return; }
+  showToast('🔍 複数領収書を解析中...');
+  const reader = new FileReader();
+  reader.onload = async e => {
+    const base64 = e.target.result.split(',')[1];
+    try {
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json', 'anthropic-dangerous-direct-browser-access': 'true' },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001', max_tokens: 2000,
+          messages: [{ role: 'user', content: [{
+            type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: base64 }
+          }, {
+            type: 'text',
+            text: 'この写真に複数の領収書・レシートが写っています。それぞれを個別に識別し、JSON配列で返してください。各要素: {"date":"YYYY-MM-DD","name":"店舗名","content":"内容","amount":金額数値,"payment":"現金またはクレジット","invoice":"T+13桁またはnull"}。不明はnull。JSONのみ返答。'
+          }] }]
+        })
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error.message);
+      const text = data.content[0].text.trim().replace(/```json\n?|\n?```/g,'').trim();
+      const parsed = JSON.parse(text);
+      if (!Array.isArray(parsed) || parsed.length === 0) { showToast('領収書を検出できませんでした'); return; }
+      showBatchReview(parsed, base64);
+    } catch(e) { showToast('❌ OCRエラー: ' + e.message); }
+    input.value = '';
+  };
+  reader.readAsDataURL(file);
+}
+
+function showBatchReview(receipts, imgBase64) {
+  const kanjouOpts = ['会議費','消耗品費','交際費','旅費交通費','福利厚生費','仕入','租税公課','その他'].map(k=>`<option>${k}</option>`).join('');
+  const rows = receipts.map((r,i) => `
+    <div id="batch-row-${i}" style="background:#f7f5f1;border-radius:10px;padding:12px;margin-bottom:8px;position:relative">
+      <button onclick="removeBatchRow(${i})" style="position:absolute;top:8px;right:8px;background:none;border:none;color:#d32f2f;font-size:16px;cursor:pointer;padding:2px 8px">✕</button>
+      <div style="font-weight:600;font-size:12px;color:#185FA5;margin-bottom:8px">領収書 ${i+1}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+        <div><label style="font-size:11px;color:#898781">日付</label><input type="date" id="br-date-${i}" value="${r.date||''}" style="width:100%;padding:5px 7px;border:0.5px solid #ccc;border-radius:6px;font-size:13px"></div>
+        <div><label style="font-size:11px;color:#898781">金額（税込）</label><input type="number" id="br-amount-${i}" value="${r.amount||''}" style="width:100%;padding:5px 7px;border:0.5px solid #ccc;border-radius:6px;font-size:13px"></div>
+        <div style="grid-column:1/-1"><label style="font-size:11px;color:#898781">店舗・支払先</label><input type="text" id="br-name-${i}" value="${(r.name||'').replace(/"/g,'&quot;')}" style="width:100%;padding:5px 7px;border:0.5px solid #ccc;border-radius:6px;font-size:13px"></div>
+        <div style="grid-column:1/-1"><label style="font-size:11px;color:#898781">内容</label><input type="text" id="br-content-${i}" value="${(r.content||'').replace(/"/g,'&quot;')}" style="width:100%;padding:5px 7px;border:0.5px solid #ccc;border-radius:6px;font-size:13px"></div>
+        <div><label style="font-size:11px;color:#898781">支払方法</label><select id="br-payment-${i}" style="width:100%;padding:5px 7px;border:0.5px solid #ccc;border-radius:6px;font-size:13px;background:#fff"><option value="現金" ${ !(r.payment||'').includes('クレジット')?'selected':''}>現金</option><option value="クレジット" ${(r.payment||'').includes('クレジット')?'selected':''}>クレジット</option><option value="他">他</option></select></div>
+        <div><label style="font-size:11px;color:#898781">勘定科目</label><select id="br-kanjou-${i}" style="width:100%;padding:5px 7px;border:0.5px solid #ccc;border-radius:6px;font-size:13px;background:#fff">${kanjouOpts}</select></div>
+        <div style="grid-column:1/-1"><label style="font-size:11px;color:#898781">インボイス番号</label><input type="text" id="br-invoice-${i}" value="${(r.invoice||'').replace(/"/g,'&quot;')}" placeholder="T1234567890123" style="width:100%;padding:5px 7px;border:0.5px solid #ccc;border-radius:6px;font-size:13px"></div>
+      </div>
+    </div>`).join('');
+  document.getElementById('modal-title').textContent = `📋 一括登録（${receipts.length}件確認）`;
+  document.getElementById('modal-body').innerHTML = `
+    <img src="data:image/jpeg;base64,${imgBase64}" style="width:100%;max-height:140px;object-fit:contain;border-radius:8px;background:#f0ede8;margin-bottom:12px">
+    <div id="batch-rows">${rows}</div>
+    <button onclick="saveBatchEntries(${receipts.length})" style="width:100%;padding:14px;background:#2E7D32;color:#fff;border:none;border-radius:10px;font-size:16px;font-weight:600;cursor:pointer;margin-bottom:10px">✅ まとめて保存する</button>
+  `;
+  document.getElementById('modal').classList.add('open');
+}
+
+function removeBatchRow(i) {
+  const el = document.getElementById('batch-row-' + i);
+  if (el) el.style.display = 'none';
+}
+
+function saveBatchEntries(total) {
+  let saved = 0;
+  for (let i = 0; i < total; i++) {
+    const row = document.getElementById('batch-row-' + i);
+    if (!row || row.style.display === 'none') continue;
+    const date = document.getElementById('br-date-' + i)?.value;
+    const amount = Number(document.getElementById('br-amount-' + i)?.value) || 0;
+    if (!date || !amount) continue;
+    const payment = document.getElementById('br-payment-' + i)?.value || '現金';
+    const type = detectRyoshuType(payment);
+    const data = type === 'ryoshu' ? ryoshuData : cashRyoshuData;
+    const newNo = (data.length > 0 ? Math.max(...data.map(r=>Number(r['No.'])||0)) : 0) + 1;
+    data.push({
+      'No.': newNo,
+      '日付': date,
+      '店舗・支払先': document.getElementById('br-name-' + i)?.value || '',
+      '内容': document.getElementById('br-content-' + i)?.value || '',
+      '金額（税込）': amount,
+      '支払方法': payment,
+      '勘定科目（参考）': document.getElementById('br-kanjou-' + i)?.value || 'その他',
+      'インボイス番号': document.getElementById('br-invoice-' + i)?.value?.trim() || null,
+      '備考': null
+    });
+    saved++;
+  }
+  saveData('ryoshu', ryoshuData); renderList('ryoshu');
+  saveData('cash_ryoshu', cashRyoshuData); renderList('cash_ryoshu');
+  document.getElementById('modal').classList.remove('open');
+  showToast(`✅ ${saved}件を登録しました`);
 }
 
 async function runOCR() {

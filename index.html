@@ -2077,6 +2077,10 @@ function compressImage(dataUrl, maxWidth=800, quality=0.60) {
     img.src = dataUrl;
   });
 }
+// OCR専用圧縮：解析に必要な最低限のサイズに絞る（高速化）
+function compressForOCR(dataUrl) {
+  return compressImage(dataUrl, 600, 0.50);
+}
 
 function handlePhoto(input) {
   const file = input.files[0];
@@ -2223,19 +2227,24 @@ async function runMultiPhotoOCR(input) {
   const apiKey = localStorage.getItem('furue_api_key');
   if (!apiKey) { showToast('APIキーが必要です。単票登録でAPIキーを先に設定してください'); input.value=''; return; }
 
-  const toBase64 = file => new Promise((res, rej) => {
-    const r = new FileReader();
-    r.onload = e => res(e.target.result.split(',')[1]);
-    r.onerror = rej;
-    r.readAsDataURL(file);
-  });
+  const toBase64 = async file => {
+    const dataUrl = await new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = e => res(e.target.result);
+      r.onerror = rej;
+      r.readAsDataURL(file);
+    });
+    // OCR用に小さく圧縮
+    const compressed = await compressForOCR(dataUrl);
+    return compressed.split(',')[1];
+  };
 
   const ocrOne = async (b64) => {
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json', 'anthropic-dangerous-direct-browser-access': 'true' },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001', max_tokens: 400,
+        model: 'claude-haiku-4-5-20251001', max_tokens: 150,
         messages: [{ role: 'user', content: [{
           type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: b64 }
         }, {
@@ -2305,6 +2314,9 @@ async function runOCR() {
   document.getElementById('api-key-area').style.display = 'none';
 
   try {
+    // OCR用に小さく圧縮（送信データ削減→高速化）
+    const ocrDataUrl = await compressForOCR('data:image/jpeg;base64,' + currentPhotoBase64);
+    const ocrBase64 = ocrDataUrl.split(',')[1];
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -2315,12 +2327,12 @@ async function runOCR() {
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 300,
+        max_tokens: 150,
         messages: [{
           role: 'user',
           content: [{
             type: 'image',
-            source: { type: 'base64', media_type: 'image/jpeg', data: currentPhotoBase64 }
+            source: { type: 'base64', media_type: 'image/jpeg', data: ocrBase64 }
           }, {
             type: 'text',
             text: 'この領収書・レシートから以下をJSON形式で抽出してください。{"date":"YYYY-MM-DD","name":"店舗名","content":"購入内容","amount":金額(数字のみ),"payment":"支払方法","invoice":"インボイス登録番号T+13桁またはnull"}。不明な場合はnull。JSONのみ返答。'

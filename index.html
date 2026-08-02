@@ -1545,6 +1545,9 @@ function renderList(type) {
     const photoKey = type==='cash_ryoshu' ? 'c'+r['No.'] : String(r['No.']);
     const hasPhoto = r.photoUrl || r.photo || localPhotos[photoKey];
     const photoBtn = hasPhoto ? `<button onclick="event.stopPropagation();viewPhoto('${type}',${r['No.']})" style="padding:3px 8px;background:#FFF3E0;color:#E65100;border:none;border-radius:6px;font-size:12px;cursor:pointer;margin-left:6px;">📷 写真</button>` : '';
+    // Amazon はプライベート購入混在のため、写真未添付の場合に貼付ボタンを表示
+    const isAmazon = /アマゾン|amazon/i.test(r['店舗・支払先']||'');
+    const amazonPhotoBtn = (isAmazon && !hasPhoto) ? `<button onclick="event.stopPropagation();showPhoto('${type}',${r['No.']})" style="padding:3px 8px;background:#FF9800;color:#fff;border:none;border-radius:6px;font-size:12px;cursor:pointer;margin-left:6px;">📎 レシート添付</button>` : '';
     const srMatches = type === 'ryoshu' ? findSmartReceipt(r['日付'], r['金額（税込）']) : [];
     const srBtn = srMatches.length > 0 ? `<button onclick="event.stopPropagation();viewSmartReceipt('${r['日付']}',${r['金額（税込）']})" style="padding:3px 8px;background:#E8F5E9;color:#2E7D32;border:none;border-radius:6px;font-size:12px;cursor:pointer;margin-left:6px;">🧾 明細</button>` : '';
     const webReceiptUrl = type === 'ryoshu' ? getReceiptSiteUrl(r['店舗・支払先'] || '') : null;
@@ -1554,7 +1557,7 @@ function renderList(type) {
     const clickAction = isSelectMode ? `toggleSelectEntry('${type}',${r['No.']})` : `showDetail('${type}',${r['No.']})`;
     return `<div class="entry${isSel?' selected':''}" data-selkey="${type}_${r['No.']}" onclick="${clickAction}">
       <div class="entry-top">${cbHtml}<span class="entry-name">${name||''}</span><span class="entry-amount">${fmt(r['金額（税込）'])}</span></div>
-      <div class="entry-sub">${r['日付']||''} · ${r['支払方法']||''} · ${sub||''} ${badge}${pdfBtn}${photoBtn}${srBtn}${webReceiptBtn}</div>
+      <div class="entry-sub">${r['日付']||''} · ${r['支払方法']||''} · ${sub||''} ${badge}${pdfBtn}${photoBtn}${amazonPhotoBtn}${srBtn}${webReceiptBtn}</div>
     </div>`;
   }).join('');
 }
@@ -4215,7 +4218,6 @@ function importCreditCSV(input) {
   <div style="display:flex;gap:6px;margin-bottom:10px;overflow-x:auto;padding-bottom:2px">
     <button onclick="showCsvVendor('credit1038')" id="csv-tab-credit1038" class="csv-vendor-tab csv-vendor-active">💳 クレジット1038</button>
     <button onclick="showCsvVendor('monotaro')" id="csv-tab-monotaro" class="csv-vendor-tab">🛒 モノタロウ</button>
-    <button onclick="showCsvVendor('amazon')" id="csv-tab-amazon" class="csv-vendor-tab">📦 アマゾン</button>
     <button onclick="showCsvVendor('royal')" id="csv-tab-royal" class="csv-vendor-tab">🏠 ロイヤルホーム</button>
     <button onclick="showCsvVendor('iris')" id="csv-tab-iris" class="csv-vendor-tab">🌸 アイリスオーヤマ</button>
   </div>

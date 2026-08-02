@@ -808,6 +808,20 @@ function showPage(name) {
   if (name === 'kyuyo') initKyuyoPage();
   if (name === 'uriage') renderUriagePage();
   if (name === 'credit') { renderCreditPage(); renderPendingReceipts(); }
+  if (name === 'nyuryoku') {
+    // フォームを毎回リセット（連続登録できるように）
+    currentPhotoBase64 = null;
+    document.getElementById('photo-preview').style.display = 'none';
+    const pi2 = document.getElementById('photo-input');
+    const pli2 = document.getElementById('photo-library-input');
+    pi2.value = ''; pi2.type = ''; pi2.type = 'file';
+    pli2.value = ''; pli2.type = ''; pli2.type = 'file';
+    const ocrEl = document.getElementById('ocr-result');
+    ocrEl.textContent = '読み取り中...';
+    ocrEl.style.background = '#E6F1FB';
+    ocrEl.style.color = '#185FA5';
+    document.getElementById('api-key-area').style.display = 'none';
+  }
 }
 
 // ===== DASHBOARD =====
@@ -2025,8 +2039,14 @@ async function addEntry() {
     const b64 = currentPhotoBase64;
     currentPhotoBase64 = null;
     document.getElementById('photo-preview').style.display = 'none';
-    document.getElementById('photo-input').value = '';
-    document.getElementById('photo-library-input').value = '';
+    // iOS Safariでもonchangeが再発火するようにtypeリセット
+    const pi = document.getElementById('photo-input');
+    const pli = document.getElementById('photo-library-input');
+    pi.value = ''; pi.type = ''; pi.type = 'file';
+    pli.value = ''; pli.type = ''; pli.type = 'file';
+    document.getElementById('ocr-result').textContent = '読み取り中...';
+    document.getElementById('ocr-result').style.background = '#E6F1FB';
+    document.getElementById('ocr-result').style.color = '#185FA5';
     showToast('📤 写真をアップロード中...');
     const photoUrl = await uploadPhoto(photoKey, b64);
     if (photoUrl) {
@@ -2082,9 +2102,9 @@ function compressImage(dataUrl, maxWidth=800, quality=0.60) {
     img.src = dataUrl;
   });
 }
-// OCR専用圧縮：テキスト読み取り専用に最小化（転送量削減→高速化）
+// OCR専用圧縮：精度と速度のバランス
 function compressForOCR(dataUrl) {
-  return compressImage(dataUrl, 400, 0.35);
+  return compressImage(dataUrl, 600, 0.50);
 }
 
 function handlePhoto(input) {

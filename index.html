@@ -2535,13 +2535,18 @@ function compressImage(dataUrl, maxWidth=800, quality=0.60) {
   return new Promise(resolve => {
     const img = new Image();
     img.onload = () => {
-      let w = img.width, h = img.height;
-      if (w > maxWidth) { h = Math.round(h * maxWidth / w); w = maxWidth; }
-      const canvas = document.createElement('canvas');
-      canvas.width = w; canvas.height = h;
-      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-      resolve(canvas.toDataURL('image/jpeg', quality));
+      try {
+        let w = img.width, h = img.height;
+        if (w > maxWidth) { h = Math.round(h * maxWidth / w); w = maxWidth; }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) { resolve(dataUrl); return; }
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      } catch(e) { resolve(dataUrl); }
     };
+    img.onerror = () => resolve(dataUrl); // 読み込み失敗時も元のURLで続行
     img.src = dataUrl;
   });
 }
@@ -2563,8 +2568,12 @@ function handlePhoto(input) {
     if (savedKey) {
       runOCR();
     } else {
-      document.getElementById('ocr-result').textContent = 'APIキーを入力してOCRを実行してください';
-      document.getElementById('api-key-area').style.display = 'block';
+      // OCRなしでも写真は取り込み済み。フォームを手入力して登録可能
+      const resultEl = document.getElementById('ocr-result');
+      resultEl.textContent = '📷 写真を取り込みました。フォームを入力して「登録する」を押してください（OCRを使う場合はAPIキーを設定）';
+      resultEl.style.background = '#e8f4fd';
+      resultEl.style.color = '#1a5276';
+      // api-key-areaは非表示のまま（OCRは任意）
     }
   };
   reader.readAsDataURL(file);
@@ -2826,9 +2835,9 @@ async function runOCR() {
     resultEl.style.background = '#d1f7e0'; resultEl.style.color = '#155724';
     showToast('フォームに自動入力しました');
   } catch(e) {
-    resultEl.textContent = '読み取りエラー: ' + e.message;
+    resultEl.textContent = '⚠️ OCR読み取りエラー（写真は取り込み済み）: ' + e.message + '　→ フォームを手入力して「登録する」を押してください';
     resultEl.style.background = '#FCEBEB'; resultEl.style.color = '#A32D2D';
-    document.getElementById('api-key-area').style.display = 'block';
+    // APIキーエリアは表示しない（OCRなしでも登録可能なので混乱を避ける）
   }
 }
 

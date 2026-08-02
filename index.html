@@ -1122,6 +1122,182 @@ function renderShiireGrouped() {
   }).join('');
 }
 
+// ===== CSV取込（ブラウザ）=====
+let _pendingCsvImport = null;
+
+function splitCsvLine(line) {
+  const cols = []; let inQ = false, cur = '';
+  for (const ch of line) {
+    if (ch === '"') { inQ = !inQ; }
+    else if (ch === ',' && !inQ) { cols.push(cur); cur = ''; }
+    else { cur += ch; }
+  }
+  cols.push(cur);
+  return cols.map(c => c.trim().replace(/^"|"$/g,''));
+}
+
+function parseCsvRows(text) {
+  const lines = text.split(/\r?\n/).filter(l => l.trim());
+  let headerIdx = -1, headers = [];
+  for (let i = 0; i < Math.min(15, lines.length); i++) {
+    const cols = splitCsvLine(lines[i]);
+    if (cols.some(c => /利用日|ご利用日/.test(c)) && cols.some(c => /金額|利用額/.test(c))) {
+      headerIdx = i; headers = cols; break;
+    }
+  }
+  if (headerIdx < 0) return [];
+  const dateCol = headers.findIndex(h => /利用日/.test(h));
+  const nameCol = headers.findIndex(h => /利用内容|店名|加盟店/.test(h));
+  const amtCol  = headers.findIndex(h => /^金額$|利用金額|請求金額/.test(h));
+  if (dateCol < 0 || amtCol < 0) return [];
+  const rows = [];
+  for (let i = headerIdx + 1; i < lines.length; i++) {
+    const cols = splitCsvLine(lines[i]);
+    const ds = (cols[dateCol]||'').trim().replace(/-/g,'/');
+    const name = (cols[nameCol >= 0 ? nameCol : 1]||'').trim();
+    const amt = parseInt((cols[amtCol]||'').replace(/[¥,\s]/g,''));
+    if (!ds || !ds.match(/\d{4}\/\d{1,2}\/\d{1,2}/) || isNaN(amt) || amt <= 0) continue;
+    rows.push({ date: ds, name, amount: amt });
+  }
+  return rows;
+}
+
+function guessCategoryJs(name) {
+  const n = (name||'').toLowerCase();
+  if (/anthropic|claude|microsoft|adobe|chatgpt/.test(n)) return '通信費';
+  if (/モノタロウ|monotaro/.test(n)) return '消耗品費';
+  if (/ホームセンター|ナフコ|ビバホーム|ケーズデンキ/.test(n)) return '消耗品費';
+  if (/アイリス/.test(n)) return '消耗品費';
+  if (/ホテル|イン|じゃらん|リゾート/.test(n)) return '旅費交通費';
+  if (/空港|エアポート|uber|タクシー|鉄道|新幹線/.test(n)) return '旅費交通費';
+  if (/スターバックス|コーヒー|カフェ/.test(n)) return '接待交際費';
+  if (/レストラン|食堂|定食|居酒屋|焼肉|漁師|パスタ|ラーメン|料理|八珍|飲食/.test(n)) return '接待交際費';
+  if (/コミュファ|ソネット|オプテージ|電力|電気|通信/.test(n)) return '通信費';
+  if (/ジョブカン/.test(n)) return 'システム費';
+  if (/アマゾン|amazon/.test(n)) return '消耗品費';
+  return '消耗品費';
+}
+
+function matchCsvEntries(csvRows) {
+  const MATCH_DAYS = 3;
+  const creditRecs = ryoshuData.filter(r => (r['支払方法']||'').includes('クレジット'));
+  // Build index
+  const idx = {};
+  creditRecs.forEach(r => {
+    const d = (r['日付']||'').replace(/-/g,'/');
+    const k = d + '_' + (Number(r['金額（税込）'])||0);
+    if (!idx[k]) idx[k] = [];
+    idx[k].push(r);
+  });
+  const matchedIds = new Set();
+  const matched = [], newEntries = [];
+  csvRows.forEach(csv => {
+    const parts = csv.date.split('/');
+    if (parts.length !== 3) { newEntries.push(csv); return; }
+    const base = new Date(+parts[0], +parts[1]-1, +parts[2]);
+    let found = null;
+    for (let d = 0; d <= MATCH_DAYS && !found; d++) {
+      for (const s of (d===0?[0]:[1,-1])) {
+        const cd = new Date(base); cd.setDate(cd.getDate()+d*s);
+        const ds = `${cd.getFullYear()}/${String(cd.getMonth()+1).padStart(2,'0')}/${String(cd.getDate()).padStart(2,'0')}`;
+        const cands = (idx[ds+'_'+csv.amount]||[]).filter(r=>!matchedIds.has(r['No.']));
+        if (cands.length) { found = cands[0]; break; }
+      }
+    }
+    if (found) {
+      matchedIds.add(found['No.']);
+      found['csv確認'] = true;
+      if (!found['店舗・支払先'] && csv.name) found['店舗・支払先'] = csv.name;
+      matched.push({ csv, receipt: found });
+    } else {
+      newEntries.push(csv);
+    }
+  });
+  return { matched, newEntries };
+}
+
+function handleCsvUpload(input) {
+  const file = input.files[0];
+  if (!file) return;
+  input.value = ''; input.type=''; input.type='file';
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    let text;
+    try { text = new TextDecoder('shift_jis').decode(e.target.result); }
+    catch { try { text = new TextDecoder('utf-8').decode(e.target.result); } catch { showToast('ファイル読み込みエラー'); return; } }
+    const rows = parseCsvRows(text);
+    if (!rows.length) { showToast('CSVを読み取れませんでした（列名を確認してください）'); return; }
+    const { matched, newEntries } = matchCsvEntries(rows);
+    _pendingCsvImport = { matched, newEntries, filename: file.name, total: rows.length };
+    showCsvImportPreview();
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function showCsvImportPreview() {
+  const { matched, newEntries, filename, total } = _pendingCsvImport;
+  const previewRows = newEntries.slice(0, 30).map(e =>
+    `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid #f5f5f5;font-size:12px">
+      <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding-right:8px">${e.name||'不明'}</span>
+      <span style="white-space:nowrap;color:#52514e;margin-right:8px">${e.date}</span>
+      <span style="white-space:nowrap;font-weight:600">¥${e.amount.toLocaleString()}</span>
+    </div>`).join('') + (newEntries.length > 30 ? `<div style="font-size:11px;color:#898781;padding:4px 0">…他 ${newEntries.length-30}件</div>`:'');
+  const html = `
+    <div id="csv-import-modal" onclick="if(event.target.id==='csv-import-modal')closeCsvImportModal()" style="position:fixed;inset:0;background:rgba(0,0,0,0.55);z-index:600;display:flex;align-items:flex-end;justify-content:center">
+      <div style="background:#fff;border-radius:16px 16px 0 0;padding:20px;width:100%;max-width:500px;max-height:80vh;overflow-y:auto">
+        <div style="font-size:16px;font-weight:700;margin-bottom:2px">📂 CSV取込確認</div>
+        <div style="font-size:12px;color:#898781;margin-bottom:14px">${filename}</div>
+        <div style="background:#E6F1FB;border-radius:10px;padding:12px 14px;margin-bottom:14px;font-size:13px;line-height:1.8">
+          CSV件数：<strong>${total}件</strong><br>
+          照合済（レシートあり）：<strong style="color:#2E7D32">✓ ${matched.length}件</strong><br>
+          新規追加：<strong style="color:#185FA5">＋ ${newEntries.length}件</strong>
+        </div>
+        ${newEntries.length > 0
+          ? `<div style="font-size:13px;font-weight:600;color:#185FA5;margin-bottom:8px">追加される ${newEntries.length} 件</div><div style="max-height:280px;overflow-y:auto">${previewRows}</div>`
+          : `<div style="color:#2E7D32;font-size:13px;padding:10px 0">✅ 全件レシートと照合済。新規追加なし。</div>`}
+        <div style="display:flex;gap:10px;margin-top:16px">
+          <button onclick="closeCsvImportModal()" style="flex:1;padding:12px;background:#f0ede8;border:none;border-radius:10px;font-size:14px;cursor:pointer;font-weight:500">キャンセル</button>
+          <button onclick="confirmCsvImport()" style="flex:2;padding:12px;background:#185FA5;color:#fff;border:none;border-radius:10px;font-size:14px;font-weight:700;cursor:pointer">✅ 取込む（+${newEntries.length}件）</button>
+        </div>
+      </div>
+    </div>`;
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function closeCsvImportModal() {
+  const m = document.getElementById('csv-import-modal');
+  if (m) m.remove();
+}
+
+async function confirmCsvImport() {
+  if (!_pendingCsvImport) return;
+  const { newEntries, matched } = _pendingCsvImport;
+  closeCsvImportModal();
+  if (newEntries.length > 0) {
+    const maxNo = ryoshuData.reduce((m,r) => Math.max(m, Number(r['No.'])||0), 0);
+    let nextNo = maxNo + 1;
+    newEntries.forEach(e => {
+      ryoshuData.push({
+        'No.': nextNo++,
+        '日付': e.date,
+        '店舗・支払先': e.name,
+        '内容': '',
+        '金額（税込）': e.amount,
+        '支払方法': 'クレジット',
+        '勘定科目（参考）': guessCategoryJs(e.name),
+        '備考': 'CSV自動取込',
+        'csv確認': true,
+        photo: null,
+      });
+    });
+  }
+  _pendingCsvImport = null;
+  saveData('ryoshu', ryoshuData);
+  renderList('ryoshu');
+  renderCsvDataPage();
+  showToast(`✅ CSV取込完了：+${newEntries.length}件追加、${matched.length}件照合済`);
+}
+
 // ===== 各社CSVデーター =====
 let currentCsvVendor = 'credit1038';
 function showCsvVendor(vendor) {

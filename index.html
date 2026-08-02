@@ -867,6 +867,7 @@ function showPage(name) {
   if (name === 'csv_data') renderCsvDataPage();
   if (name === 'nyuryoku') {
     currentPhotoBase64 = null;
+    currentOCRBase64 = null;
     document.getElementById('photo-preview').style.display = 'none';
     const pi2 = document.getElementById('photo-input');
     const pli2 = document.getElementById('photo-library-input');
@@ -2659,13 +2660,19 @@ function compressForOCR(dataUrl) {
   return compressImage(dataUrl, 600, 0.50);
 }
 
+let currentOCRBase64 = null; // OCR用に高解像度保持（登録用と別管理）
+
 function handlePhoto(input) {
   const file = input.files[0];
   if (!file) return;
   const reader = new FileReader();
   reader.onload = async e => {
+    // 登録保存用: 800px/60%（軽量）
     const compressed = await compressImage(e.target.result);
     currentPhotoBase64 = compressed.split(',')[1];
+    // OCR用: 1600px/85%（文字認識に十分な高解像度）
+    const ocrCompressed = await compressImage(e.target.result, 1600, 0.85);
+    currentOCRBase64 = ocrCompressed.split(',')[1];
     document.getElementById('preview-img').src = compressed;
     document.getElementById('photo-preview').style.display = 'block';
     const savedKey = localStorage.getItem('furue_api_key');
@@ -2895,9 +2902,8 @@ async function runOCR() {
   document.getElementById('api-key-area').style.display = 'none';
 
   try {
-    // OCR用に小さく圧縮（送信データ削減→高速化）
-    const ocrDataUrl = await compressForOCR('data:image/jpeg;base64,' + currentPhotoBase64);
-    const ocrBase64 = ocrDataUrl.split(',')[1];
+    // OCR用高解像度画像を使用（currentOCRBase64がなければフォールバック）
+    const ocrBase64 = currentOCRBase64 || currentPhotoBase64;
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -2907,8 +2913,8 @@ async function runOCR() {
         'anthropic-dangerous-direct-browser-access': 'true'
       },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
-        max_tokens: 150,
+        model: 'claude-sonnet-4-6',
+        max_tokens: 400,
         messages: [{
           role: 'user',
           content: [{
@@ -2916,7 +2922,9 @@ async function runOCR() {
             source: { type: 'base64', media_type: 'image/jpeg', data: ocrBase64 }
           }, {
             type: 'text',
-            text: 'レシート/領収書からJSONのみ返答:{"date":"YYYY-MM-DD","name":"店名","content":"品目","amount":数値,"payment":"現金orクレジット","invoice":"T番号ornull"}'
+            text: `日本のレシートや領収書の画像です。以下の項目を正確に読み取りJSONのみ返答してください。
+{"date":"YYYY-MM-DD","name":"店名・会社名","content":"購入品目や用途（複数あれば代表的なもの）","amount":税込合計金額の数値,"payment":"支払方法（クレジット/現金/QUICPay/交通系IC等）","invoice":"インボイス登録番号（T+13桁の数字、なければnull）"}
+注意: amountは税込の最終合計額のみ。支払方法はレシートに記載のものを使用。インボイス番号はTから始まる14桁の番号。JSONのみ返答、説明不要。`
           }]
         }]
       })

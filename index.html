@@ -1073,13 +1073,6 @@ function showShiireDetail(no) {
 }
 
 // ===== 仕入請求書 会社別・月別グループ表示 =====
-// クレジット領収書から仕入れ対象のベンダーを月別集計して表示
-const SHIIRE_CREDIT_VENDORS = [
-  { key: 'amex1038', label: '💳 AMEXクレジット1038', filter: r => (r['支払方法']||'').includes('クレジット') },
-  { key: 'amazon',   label: '📦 アマゾン',           filter: r => /アマゾン|amazon/i.test(r['店舗・支払先']||'') },
-  { key: 'iris',     label: '🌸 アイリスオーヤマ',   filter: r => /アイリス|iris/i.test(r['店舗・支払先']||'') },
-];
-
 function renderShiireGrouped() {
   // 当年度のみ（決算期: 4月〜翌3月）
   const data = shiireData.filter(r => inFiscalYear(r['日付']));
@@ -1087,79 +1080,32 @@ function renderShiireGrouped() {
   const monthSel = document.getElementById('shiire-month-filter');
   const q = (document.getElementById('search-shiire')||{}).value?.toLowerCase() || '';
 
-  // 会社リスト更新（shiireData + クレジット固定ベンダー）
-  const shiireVendors = [...new Set(data.map(r => r['請求元'] || '').filter(Boolean))].sort();
-  const allVendors = [...shiireVendors];
-  SHIIRE_CREDIT_VENDORS.forEach(v => { if (!allVendors.includes(v.label)) allVendors.push(v.label); });
+  // 会社リスト更新
+  const vendors = [...new Set(data.map(r => r['請求元'] || '').filter(Boolean))].sort();
   const curVendor = vendorSel.value;
-  vendorSel.innerHTML = '<option value="">全社</option>' + allVendors.map(v => `<option value="${v}" ${v===curVendor?'selected':''}>${v}</option>`).join('');
+  vendorSel.innerHTML = '<option value="">全社</option>' + vendors.map(v => `<option value="${v}" ${v===curVendor?'selected':''}>${v}</option>`).join('');
 
-  // 月リスト更新（全データ対象）
-  const creditMonths = SHIIRE_CREDIT_VENDORS.flatMap(cv => ryoshuData.filter(r => inFiscalYear(r['日付']) && cv.filter(r)).map(r => (r['日付']||'').replace(/[\/\-]/g,'').slice(0,6))).filter(Boolean);
-  const months = [...new Set([...data.map(r => (r['日付']||'').replace(/[\/\-]/g,'').slice(0,6)), ...creditMonths].filter(Boolean))].sort().reverse();
+  // 月リスト更新
+  const months = [...new Set(data.map(r => (r['日付']||'').replace(/[\/\-]/g,'').slice(0,6)).filter(Boolean))].sort().reverse();
   const curMonth = monthSel.value;
   monthSel.innerHTML = '<option value="">全月</option>' + months.map(m => `<option value="${m}" ${m===curMonth?'selected':''}>${m.slice(0,4)}年${m.slice(4,6)}月</option>`).join('');
 
-  // フィルタリング（shiireData）
+  // フィルタリング
   let filtered = data;
   if (vendorSel.value) filtered = filtered.filter(r => r['請求元'] === vendorSel.value);
   if (monthSel.value) filtered = filtered.filter(r => (r['日付']||'').replace(/[\/\-]/g,'').slice(0,6) === monthSel.value);
   if (q) filtered = filtered.filter(r => (r['請求元']||'').toLowerCase().includes(q) || (r['件名']||'').toLowerCase().includes(q));
 
-  // shiireデータの会社別グループ
+  const total = filtered.reduce((s,r) => s+(Number(r['金額（税込）'])||0), 0);
+  document.getElementById('summary-shiire').innerHTML = `合計 <strong>¥${total.toLocaleString()}</strong>（${filtered.length}件）`;
+
+  // 会社ごとにグループ化
   const byVendor = {};
   filtered.forEach(r => {
     const v = r['請求元'] || '未設定';
     if (!byVendor[v]) byVendor[v] = [];
     byVendor[v].push(r);
   });
-
-  // クレジット領収書ベンダーの月別集計（参照表示）
-  const creditVendorHtmls = [];
-  SHIIRE_CREDIT_VENDORS.forEach(cv => {
-    const isVendorFiltered = vendorSel.value && vendorSel.value !== cv.label;
-    if (isVendorFiltered) return; // 他ベンダーが選択中はスキップ
-    const creditRows = ryoshuData.filter(r =>
-      inFiscalYear(r['日付']) && cv.filter(r) &&
-      (!monthSel.value || (r['日付']||'').replace(/[\/\-]/g,'').slice(0,6) === monthSel.value) &&
-      (!q || (r['店舗・支払先']||'').toLowerCase().includes(q) || (r['内容']||'').toLowerCase().includes(q))
-    );
-    if (!creditRows.length) return;
-    const vTotal = creditRows.reduce((s,r) => s+(Number(r['金額（税込）'])||0), 0);
-    // 月別サブグループ
-    const byM = {};
-    creditRows.forEach(r => {
-      const m = (r['日付']||'').replace(/[\/\-]/g,'').slice(0,6) || '未設定';
-      if (!byM[m]) byM[m] = [];
-      byM[m].push(r);
-    });
-    const monthsHtml = Object.entries(byM).sort((a,b)=>b[0].localeCompare(a[0])).map(([m, mrows]) => {
-      const mTotal = mrows.reduce((s,r) => s+(Number(r['金額（税込）'])||0), 0);
-      const label = m.length===6 ? `${m.slice(0,4)}年${m.slice(4,6)}月` : m;
-      const rowsHtml = mrows.map(r => `
-        <div onclick="showDetail('ryoshu',${ryoshuData.indexOf(r)})" style="padding:8px 12px;border-bottom:1px solid #f5f5f5;font-size:13px;cursor:pointer">
-          <div style="display:flex;justify-content:space-between;align-items:center">
-            <div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0">${r['店舗・支払先']||''}</div>
-            <div style="font-weight:600;white-space:nowrap;margin-left:8px">¥${(Number(r['金額（税込）'])||0).toLocaleString()}</div>
-          </div>
-          <div style="font-size:11px;color:#898781;margin-top:1px">${r['日付']||''} · ${r['内容']||''}</div>
-        </div>`).join('');
-      return `<div style="background:#f9f9f7;border-radius:8px;margin-bottom:6px;overflow:hidden">
-        <div style="background:#eee;padding:6px 12px;font-size:12px;font-weight:600;color:#52514e;display:flex;justify-content:space-between">
-          <span>${label}（${mrows.length}件）</span><span>¥${mTotal.toLocaleString()}</span>
-        </div>${rowsHtml}</div>`;
-    }).join('');
-    creditVendorHtmls.push(`<div style="background:#fff;border:1px solid #d0e4f7;border-radius:12px;margin-bottom:12px;overflow:hidden">
-      <div style="background:#2563EB;color:#fff;padding:10px 14px;display:flex;justify-content:space-between;align-items:center">
-        <span style="font-weight:600;font-size:14px">${cv.label}</span>
-        <span style="font-size:12px;font-weight:600">¥${vTotal.toLocaleString()}（${creditRows.length}件）<span style="opacity:0.7;font-size:10px;margin-left:6px">クレジット領収書より</span></span>
-      </div>
-      <div style="padding:8px">${monthsHtml}</div>
-    </div>`);
-  });
-
-  const shiireTotal = filtered.reduce((s,r) => s+(Number(r['金額（税込）'])||0), 0);
-  document.getElementById('summary-shiire').innerHTML = `合計 <strong>¥${shiireTotal.toLocaleString()}</strong>（${filtered.length}件）`;
 
   const el = document.getElementById('list-shiire');
   const shiireHtml = Object.entries(byVendor).map(([vendor, rows]) => {
@@ -1209,11 +1155,11 @@ function renderShiireGrouped() {
     </div>`;
   }).join('');
 
-  if (!shiireHtml && !creditVendorHtmls.length) {
+  if (!shiireHtml) {
     el.innerHTML = '<div style="text-align:center;padding:30px;color:#ccc">データなし</div>';
     return;
   }
-  el.innerHTML = shiireHtml + creditVendorHtmls.join('');
+  el.innerHTML = shiireHtml;
 }
 
 // ===== CSV取込（ブラウザ）=====
@@ -1437,7 +1383,22 @@ function renderCsvDataPage() {
   });
 
   const total = rows.reduce((s,r) => s+(Number(r['金額（税込）'])||0), 0);
-  el.innerHTML = `<div style="background:#E6F1FB;border-radius:10px;padding:10px 14px;margin-bottom:10px;font-size:14px;font-weight:600;color:#185FA5">${VENDOR_LABELS[currentCsvVendor]}：¥${total.toLocaleString()}（${rows.length}件）</div>` +
+
+  // CSVダウンロード関数
+  window._csvDownload = function() {
+    const header = ['日付','店舗・支払先','内容','金額（税込）','支払方法','勘定科目'];
+    const lines = [header.join(','), ...rows.map(r => header.map(k => `"${(r[k]||'').toString().replace(/"/g,'""')}"`).join(','))];
+    const blob = new Blob(['﻿'+lines.join('\r\n')], {type:'text/csv;charset=utf-8'});
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `${VENDOR_LABELS[currentCsvVendor].replace(/[💳📦🌸🏠🛒\s]/g,'')}_${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+  };
+
+  el.innerHTML = `<div style="background:#E6F1FB;border-radius:10px;padding:10px 14px;margin-bottom:10px;font-size:14px;font-weight:600;color:#185FA5;display:flex;justify-content:space-between;align-items:center">
+    <span>${VENDOR_LABELS[currentCsvVendor]}：¥${total.toLocaleString()}（${rows.length}件）</span>
+    <button onclick="_csvDownload()" style="background:#185FA5;color:#fff;border:none;border-radius:8px;padding:6px 14px;font-size:12px;cursor:pointer;font-weight:600">📥 CSV保存</button>
+  </div>` +
     Object.entries(byMonth).sort((a,b)=>b[0].localeCompare(a[0])).map(([m, mrows]) => {
       const mTotal = mrows.reduce((s,r) => s+(Number(r['金額（税込）'])||0), 0);
       const label = m.length===6 ? `${m.slice(0,4)}年${m.slice(4,6)}月` : m;
@@ -2495,7 +2456,8 @@ async function addEntry() {
     document.getElementById('ocr-result').textContent = '読み取り中...';
     document.getElementById('ocr-result').style.background = '#E6F1FB';
     document.getElementById('ocr-result').style.color = '#185FA5';
-    // まずbase64をそのまま保存（フォールバック保証）
+    // まずlocalStorageとRTDBに直接base64保存（確実なバックアップ）
+    saveLocalPhoto(photoKey, b64);
     entry['photo'] = b64;
     showToast('📤 写真を保存中...');
     // Firebase Storageにも非同期でアップロード（成功すればURLに昇格）

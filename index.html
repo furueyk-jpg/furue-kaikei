@@ -629,9 +629,26 @@ function getLocalPhotos() {
   try { return JSON.parse(localStorage.getItem('furue_photos') || '{}'); } catch { return {}; }
 }
 function saveLocalPhoto(no, base64) {
-  const p = getLocalPhotos(); p[String(no)] = base64;
-  try { localStorage.setItem('furue_photos', JSON.stringify(p)); }
-  catch(e) { showToast('⚠️ 写真保存失敗: 空き容量不足です'); }
+  // 後方互換のために残すが、新規写真はFirebase Storageへ
+  try { const p = getLocalPhotos(); p[String(no)] = base64; localStorage.setItem('furue_photos', JSON.stringify(p)); } catch {}
+}
+
+// Firebase Storageに写真をアップロードしてダウンロードURLを返す
+async function uploadPhoto(key, base64) {
+  try {
+    const ref = storage.ref('photos/' + key + '.jpg');
+    await ref.putString(base64, 'base64', { contentType: 'image/jpeg' });
+    const url = await ref.getDownloadURL();
+    return url;
+  } catch(e) {
+    console.error('写真アップロード失敗:', e);
+    if (e.code === 'storage/unauthorized') {
+      showToast('⚠️ Storageのルール設定が必要です（Firebaseコンソール参照）');
+    } else {
+      showToast('⚠️ 写真アップロード失敗: ' + (e.message || e.code));
+    }
+    return null;
+  }
 }
 
 // ===== FIREBASE KEY SANITIZER (Firebase doesn't allow '.' in keys) =====
@@ -760,7 +777,7 @@ function detectRyoshuType(shiharihouhou) {
 function saveData(key, data) {
   // ryoshu は Firebase では credit_ryoshu として保存
   const fbKey = key === 'ryoshu' ? 'credit_ryoshu' : key;
-  // Firebaseに保存（写真を除く）
+  // Firebaseに保存（base64写真のみ除外、photoUrl=URLは保持）
   const forFb = data.map(r => { const c={...r}; delete c.photo; return c; });
   db.ref('furue/'+fbKey).set(sanitizeForFb(forFb)).catch(() => showToast('同期エラー（ローカル保存済み）'));
   // localStorageにもバックアップ
@@ -1022,7 +1039,7 @@ function renderList(type) {
     const pdfNoArg = (type==='ryoshu'||type==='cash_ryoshu') ? `,${r['No_']||''}` : '';
     const pdfBtn = r['原紙PDF'] ? `<button onclick="event.stopPropagation();${pdfFn}('${r['原紙PDF'].replace(/'/g,"\\'")}' ${pdfNoArg});" style="padding:3px 8px;background:#E6F1FB;color:#185FA5;border:none;border-radius:6px;font-size:12px;cursor:pointer;margin-left:6px;">📄 原紙</button>` : '';
     const photoKey = type==='cash_ryoshu' ? 'c'+r['No.'] : String(r['No.']);
-    const hasPhoto = r.photo || localPhotos[photoKey];
+    const hasPhoto = r.photoUrl || r.photo || localPhotos[photoKey];
     const photoBtn = hasPhoto ? `<button onclick="event.stopPropagation();viewPhoto('${type}',${r['No.']})" style="padding:3px 8px;background:#FFF3E0;color:#E65100;border:none;border-radius:6px;font-size:12px;cursor:pointer;margin-left:6px;">📷 写真</button>` : '';
     const srMatches = type === 'ryoshu' ? findSmartReceipt(r['日付'], r['金額（税込）']) : [];
     const srBtn = srMatches.length > 0 ? `<button onclick="event.stopPropagation();viewSmartReceipt('${r['日付']}',${r['金額（税込）']})" style="padding:3px 8px;background:#E8F5E9;color:#2E7D32;border:none;border-radius:6px;font-size:12px;cursor:pointer;margin-left:6px;">🧾 明細</button>` : '';
@@ -1099,12 +1116,16 @@ function deleteSelected(type) {
 }
 
 function viewPhoto(type, no) {
-  const key = type === 'cash_ryoshu' ? 'c' + no : String(no);
-  const b64 = getLocalPhotos()[key];
-  if (!b64) { showToast('写真データが見つかりません'); return; }
+  const data = type === 'ryoshu' ? ryoshuData : cashRyoshuData;
+  const r = data.find(rec => String(rec['No.']) === String(no));
   window.__viewPhotoType = type;
   window.__viewPhotoNo = no;
-  document.getElementById('photo-viewer-img').src = 'data:image/jpeg;base64,' + b64;
+  // Firebase Storage URL 優先、なければlocalStorage fallback
+  const url = r && r.photoUrl;
+  const key = type === 'cash_ryoshu' ? 'c' + no : String(no);
+  const b64 = !url && (getLocalPhotos()[key] || (r && r.photo));
+  if (!url && !b64) { showToast('写真データが見つかりません'); return; }
+  document.getElementById('photo-viewer-img').src = url || ('data:image/jpeg;base64,' + b64);
   document.getElementById('photo-viewer-overlay').style.display = 'flex';
 }
 function closePhotoViewer() {
@@ -1155,14 +1176,16 @@ function replacePhotoFromViewer(input) {
     const type = window.__viewPhotoType;
     const no = window.__viewPhotoNo;
     const key = type === 'cash_ryoshu' ? 'c' + no : String(no);
-    // ローカルに保存
-    saveLocalPhoto(key, b64);
-    // data配列のphotoも更新
+    showToast('📤 写真をアップロード中...');
+    const photoUrl = await uploadPhoto(key, b64);
     const data = type==='ryoshu' ? ryoshuData : cashRyoshuData;
     const rec = data.find(r => String(r['No.']) === String(no));
-    if (rec) rec.photo = b64;
-    // ビューア更新
-    document.getElementById('photo-viewer-img').src = compressed;
+    if (rec) {
+      if (photoUrl) rec.photoUrl = photoUrl;
+      else rec.photo = b64; // fallback
+      saveData(type === 'ryoshu' ? 'ryoshu' : 'cash_ryoshu', data);
+    }
+    document.getElementById('photo-viewer-img').src = photoUrl || compressed;
     showToast('✅ 写真を入れ替えました');
     renderList(type);
   };
@@ -1308,8 +1331,9 @@ function editEntry(type, idx) {
   let photoSection = '';
   if (isRyoshu && r['No.'] != null) {
     const pk = type === 'cash_ryoshu' ? 'c' + String(r['No.']) : String(r['No.']);
-    const ep = getLocalPhotos()[pk] || r.photo || null;
-    photoSection = `<div style="margin-bottom:12px"><label style="font-size:12px;color:#898781;font-weight:500;display:block;margin-bottom:5px">📷 写真領収書</label><div id="edit-photo-preview" style="margin-bottom:8px${ep?'':';display:none'}"><img id="edit-preview-img" src="${ep?'data:image/jpeg;base64,'+ep:''}" style="max-width:100%;border-radius:8px;border:0.5px solid #ccc"><button onclick="clearEditPhoto()" style="margin-top:4px;width:100%;padding:7px;background:#fff;color:#d32f2f;border:1px solid #d32f2f;border-radius:8px;font-size:12px;cursor:pointer">✕ 写真を削除</button></div><input type="file" id="edit-photo-input" accept="image/*" capture="environment" style="display:none" onchange="handleEditPhoto(this)"><input type="file" id="edit-photo-input-lib" accept="image/*" style="display:none" onchange="handleEditPhoto(this)"><div style="display:flex;gap:8px"><label for="edit-photo-input" style="flex:1;background:#185FA5;color:#fff;border-radius:10px;padding:10px;text-align:center;font-size:13px;font-weight:500;cursor:pointer">📷 カメラで撮影</label><label for="edit-photo-input-lib" style="flex:1;background:#fff;color:#185FA5;border:1px solid #185FA5;border-radius:10px;padding:10px;text-align:center;font-size:13px;font-weight:500;cursor:pointer">🖼 ライブラリから</label></div></div>`;
+    const ep = r.photoUrl || getLocalPhotos()[pk] || r.photo || null;
+    const epSrc = ep ? (ep.startsWith('http') ? ep : 'data:image/jpeg;base64,'+ep) : '';
+    photoSection = `<div style="margin-bottom:12px"><label style="font-size:12px;color:#898781;font-weight:500;display:block;margin-bottom:5px">📷 写真領収書</label><div id="edit-photo-preview" style="margin-bottom:8px${ep?'':';display:none'}"><img id="edit-preview-img" src="${epSrc}" style="max-width:100%;border-radius:8px;border:0.5px solid #ccc"><button onclick="clearEditPhoto()" style="margin-top:4px;width:100%;padding:7px;background:#fff;color:#d32f2f;border:1px solid #d32f2f;border-radius:8px;font-size:12px;cursor:pointer">✕ 写真を削除</button></div><input type="file" id="edit-photo-input" accept="image/*" capture="environment" style="display:none" onchange="handleEditPhoto(this)"><input type="file" id="edit-photo-input-lib" accept="image/*" style="display:none" onchange="handleEditPhoto(this)"><div style="display:flex;gap:8px"><label for="edit-photo-input" style="flex:1;background:#185FA5;color:#fff;border-radius:10px;padding:10px;text-align:center;font-size:13px;font-weight:500;cursor:pointer">📷 カメラで撮影</label><label for="edit-photo-input-lib" style="flex:1;background:#fff;color:#185FA5;border:1px solid #185FA5;border-radius:10px;padding:10px;text-align:center;font-size:13px;font-weight:500;cursor:pointer">🖼 ライブラリから</label></div></div>`;
   }
   document.getElementById('modal-title').textContent = '✏️ 編集';
   document.getElementById('modal-body').innerHTML = `
@@ -1352,15 +1376,14 @@ function saveEdit(type, idx) {
   if (isRyoshu && r['No.'] != null) {
     const curKey = type === 'cash_ryoshu' ? 'c' + String(r['No.']) : String(r['No.']);
     if (window.__editPhotoBase64) {
-      r.photo = window.__editPhotoBase64;
-      const lp = getLocalPhotos(); lp[curKey] = window.__editPhotoBase64;
-      try { localStorage.setItem('furue_photos', JSON.stringify(lp)); }
-      catch(e) { showToast('⚠️ 写真保存失敗: 空き容量不足です'); }
+      // Firebase Storageにアップロード（非同期だが保存は先に進める）
+      uploadPhoto(curKey, window.__editPhotoBase64).then(url => {
+        if (url) { r.photoUrl = url; r.photo = null; saveData(type === 'ryoshu' ? 'ryoshu' : 'cash_ryoshu', type === 'ryoshu' ? ryoshuData : cashRyoshuData); renderList(type === 'ryoshu' ? 'ryoshu' : 'cash_ryoshu'); }
+      });
+      r.photo = window.__editPhotoBase64; // 一時的にローカル表示
       window.__editPhotoBase64 = null; window.__editPhotoClear = false;
     } else if (window.__editPhotoClear) {
-      r.photo = null;
-      const lp = getLocalPhotos(); delete lp[curKey];
-      try { localStorage.setItem('furue_photos', JSON.stringify(lp)); } catch {}
+      r.photo = null; r.photoUrl = null;
       window.__editPhotoClear = false;
     }
   }
@@ -1963,7 +1986,7 @@ document.getElementById('f-type').addEventListener('change', function() {
 // Set today's date
 document.getElementById('f-date').value = new Date().toISOString().split('T')[0];
 
-function addEntry() {
+async function addEntry() {
   let type = document.getElementById('f-type').value;
   const date = document.getElementById('f-date').value;
   const amount = document.getElementById('f-amount').value;
@@ -1996,39 +2019,33 @@ function addEntry() {
     entry['店舗・支払先'] = document.getElementById('f-name').value;
     entry['内容'] = document.getElementById('f-content').value;
   }
-  // 写真があれば原紙として保存（クレジット・現金領収書共通）
+  // 写真があればFirebase StorageにアップロードしてphotoUrlを保存
   if (!isShiire && currentPhotoBase64) {
     const photoKey = isCashRyoshu ? 'c' + newNo : String(newNo);
-    saveLocalPhoto(photoKey, currentPhotoBase64);
-    entry['photo'] = currentPhotoBase64;
-    // クレジット領収書は仮置きにも自動保管
-    if (!isCashRyoshu) {
-      const pending = getPendingReceipts();
-      pending.push({
-        id: Date.now() + '_' + Math.random().toString(36).slice(2),
-        photo: 'data:image/jpeg;base64,' + currentPhotoBase64,
-        storeName: entry['店舗・支払先'] || '',
-        amount: String(entry['金額（税込）'] || ''),
-        memo: entry['内容'] || '',
-        createdAt: date
-      });
-      savePendingReceipts(pending);
-    }
+    const b64 = currentPhotoBase64;
     currentPhotoBase64 = null;
     document.getElementById('photo-preview').style.display = 'none';
     document.getElementById('photo-input').value = '';
+    document.getElementById('photo-library-input').value = '';
+    showToast('📤 写真をアップロード中...');
+    const photoUrl = await uploadPhoto(photoKey, b64);
+    if (photoUrl) {
+      entry['photoUrl'] = photoUrl;
+      showToast('✅ 写真をアップロードしました');
+    }
   }
 
   data.push(entry);
   saveData(type, data);
   const destLabel = type === 'cash_ryoshu' ? '現金領収書' : type === 'shiire' ? '仕入請求書' : 'クレジット領収書';
-  showToast(`登録しました！→ ${destLabel}`);
+  showToast(`✅ ${destLabel}に登録しました`);
   document.getElementById('f-amount').value='';
   document.getElementById('f-name').value='';
   document.getElementById('f-content').value='';
   document.getElementById('f-invoice').value='';
   document.getElementById('f-memo').value='';
-  showPage(type==='shiire'?'shiire':type==='cash_ryoshu'?'cash_ryoshu':'credit');
+  // 登録後は対応するリストページへ（クレジット→ryoshu一覧）
+  showPage(type==='shiire'?'shiire':type==='cash_ryoshu'?'cash_ryoshu':'ryoshu');
 }
 
 // ===== EXPORT CSV =====
@@ -2065,9 +2082,9 @@ function compressImage(dataUrl, maxWidth=800, quality=0.60) {
     img.src = dataUrl;
   });
 }
-// OCR専用圧縮：解析に必要な最低限のサイズに絞る（高速化）
+// OCR専用圧縮：テキスト読み取り専用に最小化（転送量削減→高速化）
 function compressForOCR(dataUrl) {
-  return compressImage(dataUrl, 600, 0.50);
+  return compressImage(dataUrl, 400, 0.35);
 }
 
 function handlePhoto(input) {
@@ -2323,7 +2340,7 @@ async function runOCR() {
             source: { type: 'base64', media_type: 'image/jpeg', data: ocrBase64 }
           }, {
             type: 'text',
-            text: 'この領収書・レシートから以下をJSON形式で抽出してください。{"date":"YYYY-MM-DD","name":"店舗名","content":"購入内容","amount":金額(数字のみ),"payment":"支払方法","invoice":"インボイス登録番号T+13桁またはnull"}。不明な場合はnull。JSONのみ返答。'
+            text: 'レシート/領収書からJSONのみ返答:{"date":"YYYY-MM-DD","name":"店名","content":"品目","amount":数値,"payment":"現金orクレジット","invoice":"T番号ornull"}'
           }]
         }]
       })
@@ -3098,16 +3115,19 @@ function closePendingMatch() {
   _pendingMatchId = null;
 }
 
-function assignPendingToEntry(pendingId, entryNo) {
+async function assignPendingToEntry(pendingId, entryNo) {
   const item = getPendingReceipts().find(p => p.id === pendingId);
   if (!item) return;
-  // エントリの写真として保存
-  const photos = getLocalPhotos();
-  photos[String(entryNo)] = item.photo;
-  try { localStorage.setItem('furue_photos', JSON.stringify(photos)); } catch {}
-  // ryoshuDataを更新
+  // 仮置き写真をFirebase StorageにアップロードしてryoshuDataに紐付け
+  const b64 = item.photo.replace(/^data:image\/\w+;base64,/, '');
+  showToast('📤 写真をアップロード中...');
+  const photoUrl = await uploadPhoto(String(entryNo), b64);
   const rec = ryoshuData.find(r => r['No.'] === entryNo);
-  if (rec) rec.photo = item.photo;
+  if (rec) {
+    if (photoUrl) rec.photoUrl = photoUrl;
+    else rec.photo = b64;
+    saveData('ryoshu', ryoshuData);
+  }
   // 仮置きから削除
   const pending = getPendingReceipts().filter(p => p.id !== pendingId);
   savePendingReceipts(pending);

@@ -1996,36 +1996,24 @@ function addEntry() {
     entry['店舗・支払先'] = document.getElementById('f-name').value;
     entry['内容'] = document.getElementById('f-content').value;
   }
-  // クレジット領収書 + 写真あり → 仮置きに自動保管（月次明細到着後に照合）
-  if (!isShiire && !isCashRyoshu && currentPhotoBase64) {
-    const pending = getPendingReceipts();
-    pending.push({
-      id: Date.now() + '_' + Math.random().toString(36).slice(2),
-      photo: 'data:image/jpeg;base64,' + currentPhotoBase64,
-      storeName: entry['店舗・支払先'] || '',
-      amount: String(entry['金額（税込）'] || ''),
-      memo: entry['内容'] || '',
-      createdAt: date
-    });
-    savePendingReceipts(pending);
-    currentPhotoBase64 = null;
-    document.getElementById('photo-preview').style.display = 'none';
-    document.getElementById('photo-input').value = '';
-    document.getElementById('f-amount').value='';
-    document.getElementById('f-name').value='';
-    document.getElementById('f-content').value='';
-    document.getElementById('f-invoice').value='';
-    document.getElementById('f-memo').value='';
-    showToast('📸 クレジット仮置きに保管しました（明細到着後に照合）');
-    showPage('credit');
-    return;
-  }
-
-  // 写真があれば原紙として保存（現金領収書・仕入）
+  // 写真があれば原紙として保存（クレジット・現金領収書共通）
   if (!isShiire && currentPhotoBase64) {
-    entry['photo'] = currentPhotoBase64;
-    const photoKey = isCashRyoshu ? 'c' + newNo : newNo;
+    const photoKey = isCashRyoshu ? 'c' + newNo : String(newNo);
     saveLocalPhoto(photoKey, currentPhotoBase64);
+    entry['photo'] = currentPhotoBase64;
+    // クレジット領収書は仮置きにも自動保管
+    if (!isCashRyoshu) {
+      const pending = getPendingReceipts();
+      pending.push({
+        id: Date.now() + '_' + Math.random().toString(36).slice(2),
+        photo: 'data:image/jpeg;base64,' + currentPhotoBase64,
+        storeName: entry['店舗・支払先'] || '',
+        amount: String(entry['金額（税込）'] || ''),
+        memo: entry['内容'] || '',
+        createdAt: date
+      });
+      savePendingReceipts(pending);
+    }
     currentPhotoBase64 = null;
     document.getElementById('photo-preview').style.display = 'none';
     document.getElementById('photo-input').value = '';

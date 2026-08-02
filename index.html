@@ -819,7 +819,7 @@ function showPage(name) {
   if (idx !== undefined) document.querySelectorAll('.tab')[idx].classList.add('active');
   if (name === 'ryoshu') { renderList('ryoshu'); renderPdfGallery('ryoshu', ryoshuPdfs); }
   if (name === 'cash_ryoshu') { renderList('cash_ryoshu'); renderPdfGallery('cash_ryoshu', []); }
-  if (name === 'shiire') { renderShiireGrouped(); renderPdfGallery('shiire', shiirePdfs); }
+  if (name === 'shiire') { renderShiireGrouped(); document.getElementById('shiire-pdf-gallery').innerHTML=''; }
   if (name === 'dashboard') renderDashboard();
   if (name === 'kyuyo') initKyuyoPage();
   if (name === 'uriage') renderUriagePage();
@@ -1028,6 +1028,12 @@ function populateMonthFilter(type, data) {
   ).join('');
 }
 
+// 仕入請求書 詳細をNo_で開く
+function showShiireDetail(no) {
+  const idx = shiireData.findIndex(r => String(r['No_']) === String(no));
+  if (idx >= 0) showDetail('shiire', idx);
+}
+
 // ===== 仕入請求書 会社別・月別グループ表示 =====
 function renderShiireGrouped() {
   const data = shiireData;
@@ -1078,15 +1084,26 @@ function renderShiireGrouped() {
       const mTotal = mrows.reduce((s,r) => s+(Number(r['金額（税込）'])||0), 0);
       const label = m.length===6 ? `${m.slice(0,4)}年${m.slice(4,6)}月` : m;
       const rowsHtml = mrows.map(r => {
-        const hasPdf = r['原紙PDF'] || r['原紙PDF_'];
+        const pdfName = r['原紙PDF'] || r['原紙PDF_'];
         const amt = Number(r['金額（税込）'])||0;
         const needs = amt === 0 ? '<span style="color:#e53935;font-size:11px;font-weight:600">※金額未入力</span>' : '';
-        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;border-bottom:1px solid #f5f5f5;font-size:13px">
-          <div style="flex:1;min-width:0">
-            <div style="font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${r['件名']||'件名未設定'}</div>
-            <div style="font-size:11px;color:#898781;margin-top:2px">${r['日付']||''}${hasPdf ? ' 📄' : ''}${needs}</div>
+        // PDFをインライン表示
+        let pdfLink = '';
+        if (pdfName) {
+          const shiireArr = Array.isArray(shiirePdfs) ? shiirePdfs : Object.values(shiirePdfs || {});
+          const pdfObj = shiireArr.find(p => p && p['ファイル名'] === pdfName);
+          const pdfUrl = pdfObj ? pdfObj.url : null;
+          pdfLink = pdfUrl
+            ? `<a href="${pdfUrl}" target="_blank" rel="noopener" style="display:inline-block;margin-top:4px;font-size:11px;color:#185FA5;text-decoration:none;background:#E6F1FB;border-radius:5px;padding:2px 7px">📄 ${pdfName} ↗</a>`
+            : `<span style="display:inline-block;margin-top:4px;font-size:11px;color:#898781;background:#f0ede8;border-radius:5px;padding:2px 7px">📄 ${pdfName}（未同期）</span>`;
+        }
+        return `<div onclick="showShiireDetail(${r['No_']||''})" style="padding:8px 12px;border-bottom:1px solid #f5f5f5;font-size:13px;cursor:pointer;active:background:#f0f0f0">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <div style="font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0">${r['件名']||'件名未設定'}</div>
+            <div style="font-weight:600;color:${amt===0?'#e53935':'#333'};white-space:nowrap;margin-left:8px">${amt===0?'<span style="color:#e53935">未入力 →</span>':'¥'+amt.toLocaleString()}</div>
           </div>
-          <div style="font-weight:600;color:${amt===0?'#e53935':'#333'};white-space:nowrap;margin-left:8px">${amt===0?'未入力':'¥'+amt.toLocaleString()}</div>
+          <div style="font-size:11px;color:#898781;margin-top:2px">${r['日付']||''}${needs}</div>
+          ${pdfLink}
         </div>`;
       }).join('');
       return `<div style="background:#f9f9f7;border-radius:8px;margin-bottom:6px;overflow:hidden">
@@ -1394,7 +1411,7 @@ function showDetail(type, idx) {
   const fields = (type==='ryoshu'||type==='cash_ryoshu')
     ? [['日付',r['日付']],['内容',r['内容']],['金額（税込）',fmt(r['金額（税込）'])],['支払方法',r['支払方法']],['勘定科目',r['勘定科目（参考）']],['備考',r['備考']],['インボイス番号',r['インボイス番号']||'未入力']]
     : [['日付',r['日付']],['件名',r['件名']],['金額（税込）',fmt(r['金額（税込）'])],['支払方法',r['支払方法']],['勘定科目',r['勘定科目（参考）']],['備考',r['備考']],['インボイス番号',r['インボイス番号']||'なし'],['原紙PDF',r['原紙PDF']||'なし']];
-  const photoBtn = ((type==='ryoshu'||type==='cash_ryoshu') && r['photo'])
+  const photoBtn = ((type==='ryoshu'||type==='cash_ryoshu') && (r['photo'] || r['photoUrl']))
     ? `<button onclick="showPhoto('${type}',${idx})" style="width:100%;padding:11px;background:#E6F1FB;color:#185FA5;border:none;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer;margin-bottom:10px;">📷 原紙を見る（写真）</button>`
     : '';
   const pdfViewBtn = r['原紙PDF']
@@ -1428,11 +1445,12 @@ function showDetail(type, idx) {
 
 function showPhoto(type, idx) {
   const r = (type==='ryoshu' ? ryoshuData : type==='cash_ryoshu' ? cashRyoshuData : shiireData)[idx];
-  if (!r['photo']) return;
+  const src = r['photoUrl'] ? r['photoUrl'] : (r['photo'] ? 'data:image/jpeg;base64,' + r['photo'] : null);
+  if (!src) return;
   const overlay = document.createElement('div');
   overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:400;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px';
   overlay.innerHTML = `
-    <img src="data:image/jpeg;base64,${r['photo']}" style="max-width:100%;max-height:80vh;border-radius:8px;object-fit:contain">
+    <img src="${src}" style="max-width:100%;max-height:80vh;border-radius:8px;object-fit:contain">
     <button onclick="this.parentElement.remove()" style="margin-top:16px;padding:10px 32px;background:#fff;border:none;border-radius:10px;font-size:15px;cursor:pointer;font-weight:500">閉じる</button>`;
   document.body.appendChild(overlay);
 }
@@ -3846,6 +3864,13 @@ function importCreditCSV(input) {
     <button onclick="showCsvVendor('amazon')" id="csv-tab-amazon" class="csv-vendor-tab">📦 アマゾン</button>
     <button onclick="showCsvVendor('royal')" id="csv-tab-royal" class="csv-vendor-tab">🏠 ロイヤルホーム</button>
     <button onclick="showCsvVendor('iris')" id="csv-tab-iris" class="csv-vendor-tab">🌸 アイリスオーヤマ</button>
+  </div>
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;background:#f0f4fa;border-radius:10px;padding:10px 12px">
+    <label style="display:flex;align-items:center;gap:6px;background:#185FA5;color:#fff;border-radius:8px;padding:9px 16px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap;flex-shrink:0">
+      📂 CSVを取込む
+      <input type="file" accept=".csv" style="display:none" onchange="handleCsvUpload(this)">
+    </label>
+    <span style="font-size:12px;color:#52514e">クレジット明細CSVを選択→照合して新規分を自動追加</span>
   </div>
   <div id="csv-vendor-content" style="min-height:200px"></div>
 </div>

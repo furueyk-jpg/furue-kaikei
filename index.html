@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="㈲フルエ 会計">
-<title>㈲フルエ 会計帳簿</title>
+<meta name="apple-mobile-web-app-title" content="㈲フルエ会計簿2026">
+<title>㈲フルエ会計簿2026</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 :root{
@@ -140,7 +140,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue','Hiragino San
 <div class="navbar">
   <div class="navbar-inner">
     <div class="nav-brand">
-      <div class="nav-title">㈲フルエ 会計帳簿</div>
+      <div class="nav-title">㈲フルエ会計簿
+        <select id="year-selector" onchange="changeYear(this.value)" style="margin-left:6px;font-size:14px;font-weight:600;background:rgba(255,255,255,0.15);color:#fff;border:1px solid rgba(255,255,255,0.3);border-radius:6px;padding:2px 6px;cursor:pointer">
+          <option value="2026" selected>2026年度</option>
+          <option value="2027">2027年度</option>
+        </select>
+      </div>
       <div class="nav-sub">Financial Ledger</div>
     </div>
     <button class="nav-icon-btn" id="refresh-btn" onclick="refreshData()" title="データ更新・同期">
@@ -789,8 +794,8 @@ function detectRyoshuType(shiharihouhou) {
 function saveData(key, data) {
   // ryoshu は Firebase では credit_ryoshu として保存
   const fbKey = key === 'ryoshu' ? 'credit_ryoshu' : key;
-  // Firebaseに保存（base64写真のみ除外、photoUrl=URLは保持）
-  const forFb = data.map(r => { const c={...r}; delete c.photo; return c; });
+  // Firebase Storage URLがある場合のみbase64を除外。URLなし＝base64をそのまま保存
+  const forFb = data.map(r => { const c={...r}; if (c.photoUrl) delete c.photo; return c; });
   db.ref('furue/'+fbKey).set(sanitizeForFb(forFb)).catch(() => showToast('同期エラー（ローカル保存済み）'));
   // localStorageにもバックアップ
   try { localStorage.setItem('furue_'+fbKey, JSON.stringify(data)); } catch {}
@@ -805,6 +810,36 @@ let shiireData = [];
 let ryoshuPdfs = [];
 let shiirePdfs = [];
 let uriageData = [];
+
+// ===== 年度選択（決算期: 4月〜翌3月）=====
+let currentYear = '2026';
+
+// 年度のフィルタ範囲を返す (例: '2026' → 2026/04 〜 2027/03)
+function fiscalYearRange(year) {
+  const y = parseInt(year);
+  return { from: `${y}/04/01`, to: `${y+1}/03/31` };
+}
+
+// 日付が当該年度内かチェック
+function inFiscalYear(dateStr, year) {
+  if (!dateStr) return false;
+  const d = dateStr.replace(/-/g, '/');
+  const range = fiscalYearRange(year || currentYear);
+  return d >= range.from && d <= range.to;
+}
+
+function changeYear(year) {
+  currentYear = year;
+  // 現在表示中のページを再描画
+  const active = document.querySelector('.page.active');
+  if (!active) return;
+  const name = active.id.replace('page-','');
+  if (name === 'ryoshu') { renderList('ryoshu'); renderPdfGallery('ryoshu', ryoshuPdfs); }
+  else if (name === 'cash_ryoshu') { renderList('cash_ryoshu'); }
+  else if (name === 'shiire') { renderShiireGrouped(); }
+  else if (name === 'csv_data') { renderCsvDataPage(); }
+  else if (name === 'dashboard') { renderDashboard(); }
+}
 
 // ===== TABS =====
 function showPage(name) {
@@ -1607,9 +1642,9 @@ function showDetail(type, idx) {
      <input type="text" id="pdf-input" placeholder="${pdfPlaceholder}" value="${r['原紙PDF']||''}">
      <button onclick="savePDFLink('${type}',${idx})">保存</button>
    </div>
-   <label style="display:flex;align-items:center;gap:8px;margin-top:8px;padding:9px 12px;background:#E6F1FB;border-radius:10px;cursor:pointer;font-size:13px;color:#185FA5;font-weight:500">
-     ☁️ Firebase StorageにPDFをアップロード
-     <input type="file" accept="application/pdf" style="display:none" onchange="uploadPDFToStorage('${type}',${idx},this)">
+   <label style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:8px;padding:12px;background:#185FA5;border-radius:10px;cursor:pointer;font-size:14px;color:#fff;font-weight:600;text-align:center">
+     📎 PDFをアップロードして保存
+     <input type="file" accept="application/pdf,image/*" style="display:none" onchange="uploadPDFToStorage('${type}',${idx},this)">
    </label>
    <div id="pdf-upload-status" style="font-size:12px;color:#898781;margin-top:4px"></div>`;
   const editBtn = `<button onclick="editEntry('${type}',${idx})" style="width:100%;padding:11px;background:#fff;color:#185FA5;border:1.5px solid #185FA5;border-radius:10px;font-size:14px;font-weight:500;cursor:pointer;margin-bottom:12px;">✏️ 編集・修正する</button>`;
@@ -2383,7 +2418,7 @@ async function addEntry() {
     entry['店舗・支払先'] = document.getElementById('f-name').value;
     entry['内容'] = document.getElementById('f-content').value;
   }
-  // 写真があればFirebase StorageにアップロードしてphotoUrlを保存
+  // 写真があればまずbase64をDBに直接保存し、Firebase Storageにも試みる
   if (!isShiire && currentPhotoBase64) {
     const photoKey = isCashRyoshu ? 'c' + newNo : String(newNo);
     const b64 = currentPhotoBase64;
@@ -2397,12 +2432,18 @@ async function addEntry() {
     document.getElementById('ocr-result').textContent = '読み取り中...';
     document.getElementById('ocr-result').style.background = '#E6F1FB';
     document.getElementById('ocr-result').style.color = '#185FA5';
-    showToast('📤 写真をアップロード中...');
-    const photoUrl = await uploadPhoto(photoKey, b64);
-    if (photoUrl) {
-      entry['photoUrl'] = photoUrl;
-      showToast('✅ 写真をアップロードしました');
-    }
+    // まずbase64をそのまま保存（フォールバック保証）
+    entry['photo'] = b64;
+    showToast('📤 写真を保存中...');
+    // Firebase Storageにも非同期でアップロード（成功すればURLに昇格）
+    uploadPhoto(photoKey, b64).then(photoUrl => {
+      if (photoUrl) {
+        entry['photoUrl'] = photoUrl;
+        delete entry['photo']; // URLがあればbase64は不要
+        saveData(type, data);  // photoUrlを保存し直す
+        showToast('✅ 写真をStorageに保存しました');
+      }
+    }).catch(() => {});
   }
 
   data.push(entry);

@@ -1071,7 +1071,8 @@ function showShiireDetail(no) {
 
 // ===== 仕入請求書 会社別・月別グループ表示 =====
 function renderShiireGrouped() {
-  const data = shiireData;
+  // 当年度のみ（決算期: 4月〜翌3月）
+  const data = shiireData.filter(r => inFiscalYear(r['日付']));
   const vendorSel = document.getElementById('shiire-vendor-filter');
   const monthSel = document.getElementById('shiire-month-filter');
   const q = (document.getElementById('search-shiire')||{}).value?.toLowerCase() || '';
@@ -1362,7 +1363,7 @@ function renderCsvDataPage() {
   };
 
   const filterFn = VENDOR_FILTERS[currentCsvVendor] || (() => true);
-  const rows = ryoshuData.filter(r => (r['支払方法']||'').includes('クレジット') && filterFn(r));
+  const rows = ryoshuData.filter(r => (r['支払方法']||'').includes('クレジット') && filterFn(r) && inFiscalYear(r['日付']));
 
   if (!rows.length) {
     el.innerHTML = `<div style="text-align:center;padding:30px;color:#bbb;font-size:14px">${VENDOR_LABELS[currentCsvVendor]}<br>データなし</div>`;
@@ -1399,12 +1400,16 @@ function renderCsvDataPage() {
 
 function renderList(type) {
   const data = type === 'ryoshu' ? ryoshuData : type === 'cash_ryoshu' ? cashRyoshuData : shiireData;
-  populateMonthFilter(type, data);
+  // 当年度のみ表示（決算期: 4月〜翌3月）
+  const yearData = data.filter(r => inFiscalYear(r['日付']));
+  populateMonthFilter(type, yearData);
   const monthFilter = (document.getElementById(type+'-month-filter')||{}).value || '';
   const q = document.getElementById('search-'+type).value.toLowerCase();
   let filtered = monthFilter
-    ? data.filter(r => (r['日付']||'').replace(/[\/\-]/g,'').slice(0,6) === monthFilter)
-    : data;
+    ? yearData.filter(r => (r['日付']||'').replace(/[\/\-]/g,'').slice(0,6) === monthFilter)
+    : yearData;
+  // 最新日付が先頭
+  filtered = [...filtered].sort((a,b) => (b['日付']||'').localeCompare(a['日付']||''));
   filtered = q ? filtered.filter(r => {
     const s = type==='ryoshu' ? r['店舗・支払先'] : r['請求元'];
     const c = type==='ryoshu' ? r['内容'] : r['件名'];

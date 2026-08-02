@@ -795,7 +795,8 @@ function saveData(key, data) {
   // ryoshu は Firebase では credit_ryoshu として保存
   const fbKey = key === 'ryoshu' ? 'credit_ryoshu' : key;
   // Firebase Storage URLがある場合のみbase64を除外。URLなし＝base64をそのまま保存
-  const forFb = data.map(r => { const c={...r}; if (c.photoUrl) delete c.photo; return c; });
+  // photo(base64)はFirebaseには書かない（容量超過でエラーになるため）。localStorage経由で管理。
+  const forFb = data.map(r => { const c={...r}; delete c.photo; return c; });
   db.ref('furue/'+fbKey).set(sanitizeForFb(forFb)).catch(() => showToast('同期エラー（ローカル保存済み）'));
   // localStorageにもバックアップ
   try { localStorage.setItem('furue_'+fbKey, JSON.stringify(data)); } catch {}
@@ -2480,7 +2481,6 @@ async function addEntry() {
         entry['photoUrl'] = photoUrl;
         delete entry['photo']; // URLがあればbase64は不要
         saveData(type, data);  // photoUrlを保存し直す
-        showToast('✅ 写真をStorageに保存しました');
       }
     }).catch(() => {});
   }
@@ -2488,14 +2488,19 @@ async function addEntry() {
   data.push(entry);
   saveData(type, data);
   const destLabel = type === 'cash_ryoshu' ? '現金領収書' : type === 'shiire' ? '仕入請求書' : 'クレジット領収書';
-  showToast(`✅ ${destLabel}に登録しました`);
   document.getElementById('f-amount').value='';
   document.getElementById('f-name').value='';
   document.getElementById('f-content').value='';
   document.getElementById('f-invoice').value='';
   document.getElementById('f-memo').value='';
   // 登録後は対応するリストページへ（クレジット→ryoshu一覧）
-  showPage(type==='shiire'?'shiire':type==='cash_ryoshu'?'cash_ryoshu':'ryoshu');
+  // 月フィルターをリセット（新規登録したエントリが確実に見えるように）
+  const destPage = type==='shiire'?'shiire':type==='cash_ryoshu'?'cash_ryoshu':'ryoshu';
+  const mf = document.getElementById(destPage+'-month-filter');
+  if (mf) mf.value = '';
+  showPage(destPage);
+  // ページ遷移後にトーストを表示（遷移前だとユーザーが気づかない）
+  setTimeout(() => showToast(`✅ ${destLabel}に登録しました`), 100);
 }
 
 // ===== EXPORT CSV =====

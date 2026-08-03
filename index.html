@@ -189,7 +189,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue','Hiragino San
     </div>
   </div>
   <div id="list-ryoshu"></div>
-  <div id="ryoshu-pdf-gallery"></div>
+  <div id="ryoshu-pdf-gallery" style="display:none"></div>
 </div>
 
 <!-- 現金領収書 -->
@@ -248,13 +248,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue','Hiragino San
     <div id="photo-preview" style="display:none;margin-bottom:10px">
       <img id="preview-img" style="width:100%;max-height:200px;object-fit:contain;border-radius:8px;background:#f0ede8">
       <div id="ocr-result" style="background:#E6F1FB;border-radius:8px;padding:10px;margin-top:8px;font-size:13px;color:#185FA5">読み取り中...</div>
-      <div id="api-key-area" style="margin-top:8px;display:none">
-        <div style="font-size:12px;color:#52514e;margin-bottom:4px">Claude API キー（初回のみ）</div>
+      <div id="api-key-area" style="margin-top:8px;display:block">
+        <div style="font-size:12px;color:#52514e;margin-bottom:4px">🔑 Claude API キー（OCR用・初回のみ）</div>
         <div style="display:flex;gap:6px">
           <input type="password" id="api-key-input" placeholder="sk-ant-..." style="flex:1;padding:8px;border:0.5px solid rgba(0,0,0,0.15);border-radius:8px;font-size:13px">
           <button onclick="runOCR()" style="padding:8px 14px;background:#185FA5;color:#fff;border:none;border-radius:8px;font-size:13px;cursor:pointer">OCR実行</button>
         </div>
-        <div style="font-size:11px;color:#898781;margin-top:4px">キーはこのデバイスに保存されます。漏洩しないよう注意ください。</div>
+        <div style="font-size:11px;color:#898781;margin-top:4px">キーはこのデバイスに保存されます。一度入力すれば次回から不要です。</div>
       </div>
     </div>
   </div>
@@ -2684,7 +2684,7 @@ function handlePhoto(input) {
       resultEl.textContent = '📷 写真を取り込みました。フォームを入力して「登録する」を押してください（OCRを使う場合はAPIキーを設定）';
       resultEl.style.background = '#e8f4fd';
       resultEl.style.color = '#1a5276';
-      // api-key-areaは非表示のまま（OCRは任意）
+      document.getElementById('api-key-area').style.display = 'block';
     }
   };
   reader.readAsDataURL(file);

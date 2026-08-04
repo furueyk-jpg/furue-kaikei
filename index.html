@@ -2586,6 +2586,21 @@ async function addEntry() {
     }).catch(() => {});
   }
 
+  // 重複チェック（同じ日付・金額・店舗名）
+  if (!isShiire) {
+    const nameKey = '店舗・支払先';
+    const dup = data.find(r =>
+      r['日付'] === entry['日付'] &&
+      Number(r['金額（税込）']) === Number(entry['金額（税込）']) &&
+      (r[nameKey]||'').trim() === (entry[nameKey]||'').trim() &&
+      (r[nameKey]||'').trim() !== ''
+    );
+    if (dup) {
+      const ok = confirm(`⚠️ 重複の可能性\n${entry['日付']} ${entry[nameKey]} ¥${Number(entry['金額（税込）']).toLocaleString()}\n同じ内容が既に登録されています（No.${dup['No.']}）。\n続けて登録しますか？`);
+      if (!ok) return;
+    }
+  }
+
   data.push(entry);
   saveData(type, data);
   const destLabel = type === 'cash_ryoshu' ? '現金領収書' : type === 'shiire' ? '仕入請求書' : 'クレジット領収書';

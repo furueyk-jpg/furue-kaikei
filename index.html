@@ -151,9 +151,144 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue','Hiragino San
     <button class="nav-icon-btn" id="refresh-btn" onclick="refreshData()" title="データ更新・同期">
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 1-9 9 9 9 0 0 1-6.36-2.64L3 21"/><path d="M3 12a9 9 0 0 1 9-9 9 9 0 0 1 6.36 2.64L21 3"/><path d="M21 3v6h-6"/><path d="M3 21v-6h6"/></svg>
     </button>
+    <button class="nav-icon-btn" onclick="openHelp()" title="AIヘルプ" style="background:rgba(255,255,255,0.18);border-radius:10px;padding:6px 10px;font-size:18px;line-height:1;border:none;cursor:pointer;color:#fff">❓</button>
     <button class="nav-btn" onclick="showPage('nyuryoku')">＋ 新規</button>
   </div>
 </div>
+
+<!-- ヘルプチャットパネル -->
+<div id="help-overlay" style="display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:#fff;z-index:10000;display:flex;flex-direction:column;font-family:-apple-system,sans-serif" hidden>
+  <div style="background:#1a237e;color:#fff;padding:16px 16px 12px;display:flex;align-items:center;gap:12px;flex-shrink:0;padding-top:max(16px,env(safe-area-inset-top))">
+    <div style="width:36px;height:36px;background:rgba(255,255,255,0.2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px">🤖</div>
+    <div style="flex:1">
+      <div style="font-weight:700;font-size:16px">AIヘルプ</div>
+      <div style="font-size:11px;opacity:0.8">㈲フルエ会計簿アシスタント</div>
+    </div>
+    <button onclick="closeHelp()" style="background:rgba(255,255,255,0.2);border:none;color:#fff;border-radius:50%;width:32px;height:32px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center">✕</button>
+  </div>
+  <div id="help-messages" style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px;background:#f5f5f5">
+    <div style="background:#e3f2fd;border-radius:16px 16px 16px 4px;padding:14px 16px;max-width:85%;font-size:14px;line-height:1.6;color:#1a237e">
+      こんにちは！㈲フルエ会計簿のAIアシスタントです。<br>操作方法やデータについて何でも聞いてください😊
+    </div>
+  </div>
+  <div style="padding:12px 16px;background:#fff;border-top:1px solid #eee;display:flex;gap:8px;flex-shrink:0;padding-bottom:max(12px,env(safe-area-inset-bottom))">
+    <textarea id="help-input" placeholder="質問を入力..." rows="1" style="flex:1;border:1.5px solid #ddd;border-radius:20px;padding:10px 16px;font-size:14px;resize:none;outline:none;font-family:-apple-system,sans-serif;max-height:120px;overflow-y:auto" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendHelp()}" oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'"></textarea>
+    <button onclick="sendHelp()" id="help-send-btn" style="background:#1a237e;color:#fff;border:none;border-radius:50%;width:42px;height:42px;font-size:18px;cursor:pointer;flex-shrink:0;display:flex;align-items:center;justify-content:center">➤</button>
+  </div>
+</div>
+
+<script>
+// ===== AIヘルプチャット =====
+const HELP_SYSTEM_PROMPT = `あなたは「㈲フルエ会計簿」アプリの専任AIアシスタントです。ユーザーの操作をサポートしてください。
+
+## アプリ概要
+有限会社フルエの会計管理アプリ。Firebase Realtime Databaseでデータ管理。決算期：4月〜翌3月。
+
+## 主な機能
+- **クレジット領収書**: クレジットカードで払った領収書。写真・インボイス番号・金額を管理
+- **現金領収書**: 現金払いの領収書管理
+- **仕入請求書**: 業者からのPDF請求書を管理（インボイス番号・原紙PDF）
+- **売上請求書**: 現場ごとの売上（検収・請求・日報フラグ）。Excelから毎朝自動同期
+- **各社CSVデーター**: モノタロウ・アイリスオーヤマなどのCSVデータ
+- **集計**: 売上・仕入れのダッシュボード
+
+## よくある操作
+- **データが見えない**: 月フィルターが現在月に設定されています→「全月」に変更
+- **写真で領収書登録**: 新規入力→写真から登録→カメラまたはフォトライブラリを選択
+- **重複警告が出る**: 同じ日付・金額・店舗名がすでに登録済み。「既存エントリの詳細を見る」で確認
+- **データ更新**: 右上の更新ボタン（↺）でFirebaseから最新データを取得
+- **インボイス番号追加**: 一覧でエントリをタップ→詳細画面で編集
+- **PDFアップロード**: 仕入請求書の詳細画面からPDFを添付可能
+
+## 注意事項
+- 各社サイトへのアクセスは「領収書をもらう」操作のみ
+- データはFirebase（クラウド）に保存されるため複数デバイスで同期
+- 写真データはローカルのみ保存（Firebaseには保存しない）
+
+簡潔で親切な日本語で答えてください。`;
+
+let helpHistory = [];
+
+function openHelp() {
+  const overlay = document.getElementById('help-overlay');
+  overlay.hidden = false;
+  overlay.style.display = 'flex';
+  document.getElementById('help-input').focus();
+}
+
+function closeHelp() {
+  const overlay = document.getElementById('help-overlay');
+  overlay.hidden = true;
+  overlay.style.display = 'none';
+}
+
+function addHelpMessage(role, text) {
+  const msgs = document.getElementById('help-messages');
+  const isUser = role === 'user';
+  const div = document.createElement('div');
+  div.style.cssText = isUser
+    ? 'background:#1a237e;color:#fff;border-radius:16px 16px 4px 16px;padding:12px 16px;max-width:85%;align-self:flex-end;font-size:14px;line-height:1.6'
+    : 'background:#fff;border-radius:16px 16px 16px 4px;padding:12px 16px;max-width:85%;font-size:14px;line-height:1.6;color:#222;box-shadow:0 1px 3px rgba(0,0,0,0.08)';
+  div.textContent = text;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+  return div;
+}
+
+async function sendHelp() {
+  const input = document.getElementById('help-input');
+  const question = input.value.trim();
+  if (!question) return;
+
+  const apiKey = localStorage.getItem('furue_api_key');
+  if (!apiKey) {
+    addHelpMessage('assistant', 'APIキーが設定されていません。設定画面からAPIキーを入力してください。');
+    return;
+  }
+
+  input.value = '';
+  input.style.height = 'auto';
+  document.getElementById('help-send-btn').disabled = true;
+
+  addHelpMessage('user', question);
+  helpHistory.push({ role: 'user', content: question });
+
+  // ローディング表示
+  const loadingDiv = addHelpMessage('assistant', '考え中...');
+
+  try {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+        'content-type': 'application/json',
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 800,
+        system: HELP_SYSTEM_PROMPT,
+        messages: helpHistory
+      })
+    });
+
+    const data = await res.json();
+    const answer = data.content?.[0]?.text || 'エラーが発生しました';
+    loadingDiv.textContent = answer;
+    helpHistory.push({ role: 'assistant', content: answer });
+
+    // 履歴が長くなりすぎたら最初の2件を削除
+    if (helpHistory.length > 20) helpHistory = helpHistory.slice(2);
+
+  } catch(e) {
+    loadingDiv.textContent = 'エラーが発生しました: ' + e.message;
+  }
+
+  document.getElementById('help-send-btn').disabled = false;
+  document.getElementById('help-messages').scrollTop = 99999;
+}
+</script>
 
 <div class="tabs">
   <button class="tab" onclick="showPage('nyuryoku')">✏️ 新規入力</button>

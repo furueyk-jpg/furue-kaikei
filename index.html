@@ -2600,8 +2600,16 @@ async function addEntry() {
       entryName !== ''
     );
     if (dup) {
-      const ok = confirm(`⚠️ 重複の可能性あり\n${entry['日付']} ${entryName} ¥${Number(entry['金額（税込）']).toLocaleString()}\n同じ内容がすでに登録されています（No.${dup['No.']}）。\n続けて登録しますか？`);
-      if (!ok) return;
+      const ok = confirm(`⚠️ すでに登録済みです\n${entry['日付']} ${entryName} ¥${Number(entry['金額（税込）']).toLocaleString()}\n（No.${dup['No.']}）\n\nOK → 重複でも追加登録する\nキャンセル → 登録せずリストを確認する`);
+      if (!ok) {
+        // キャンセル時は既存エントリのあるリストへ移動
+        const destPage2 = isCashRyoshu ? 'cash_ryoshu' : 'ryoshu';
+        const mf2 = document.getElementById(destPage2+'-month-filter');
+        if (mf2) mf2.value = '';
+        showPage(destPage2);
+        setTimeout(() => showToast(`📋 No.${dup['No.']} が既に登録されています`), 100);
+        return;
+      }
     }
   }
 

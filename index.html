@@ -1044,11 +1044,53 @@ async function refreshData() {
       if (name) showPage(name);
     }
     showToast('✅ 更新完了');
+    setTimeout(() => showDataCheckReport(), 400);
   } catch(e) {
     showToast('⚠️ 更新エラー');
   } finally {
     if (btn) btn.classList.remove('spinning');
   }
+}
+
+function showDataCheckReport() {
+  // 売上請求書: 未請求（請求フラグがfalse/null）
+  const uriageUnbilled = uriageData.filter(r => inFiscalYear(r['日付']) && !r['請求']);
+  // 仕入請求書: インボイス番号なし
+  const shiireNoInv = shiireData.filter(r => inFiscalYear(r['日付']) && !r['インボイス番号']);
+  // 仕入請求書: 原紙PDFなし
+  const shiireNoPdf = shiireData.filter(r => inFiscalYear(r['日付']) && !r['原紙PDF']);
+  // クレジット領収書: インボイスなし
+  const ryoshuNoInv = ryoshuData.filter(r => inFiscalYear(r['日付']) && !r['インボイス番号']);
+  // 現金領収書: インボイスなし
+  const cashNoInv = cashRyoshuData.filter(r => inFiscalYear(r['日付']) && !r['インボイス番号']);
+
+  const hasIssue = uriageUnbilled.length || shiireNoInv.length || shiireNoPdf.length || ryoshuNoInv.length || cashNoInv.length;
+
+  const itemRow = (r, labelKey, amtKey) =>
+    `<div style="font-size:12px;color:#555;padding:2px 0;border-bottom:0.5px solid #f0ede8">${(r['日付']||'').slice(0,7)} ${(r[labelKey]||'').slice(0,18)} <span style="float:right">¥${Number(r[amtKey]||0).toLocaleString()}</span></div>`;
+
+  const section = (color, icon, title, items, labelKey, amtKey, extra='') => items.length === 0 ? '' : `
+    <div style="background:${color};border-radius:10px;padding:11px 13px;margin-bottom:10px">
+      <div style="font-size:13px;font-weight:700;margin-bottom:6px">${icon} ${title}：<span style="color:#C62828">${items.length}件</span>${extra}</div>
+      ${items.slice(0,4).map(r => itemRow(r, labelKey, amtKey)).join('')}
+      ${items.length > 4 ? `<div style="font-size:11px;color:#888;margin-top:4px">他 ${items.length-4} 件...</div>` : ''}
+    </div>`;
+
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:flex-end;justify-content:center;padding:0;box-sizing:border-box';
+  overlay.innerHTML = `<div style="background:#fff;border-radius:20px 20px 0 0;padding:22px 18px 34px;max-width:480px;width:100%;box-shadow:0 -4px 32px rgba(0,0,0,0.18);max-height:82vh;overflow-y:auto">
+    <div style="width:36px;height:4px;background:#ddd;border-radius:2px;margin:0 auto 18px"></div>
+    <div style="font-size:17px;font-weight:700;margin-bottom:14px">📊 データ点検レポート（${currentYear}年度）</div>
+    ${!hasIssue ? '<div style="background:#E8F5E9;border-radius:12px;padding:16px;text-align:center;color:#1B5E20;font-size:15px;font-weight:600">✅ 全件問題なし</div>' : ''}
+    ${section('#FFF8E1','📤','売上請求書 未請求', uriageUnbilled,'元請け','金額（税別）')}
+    ${section('#FFF3E0','📥','仕入請求書 インボイス未入力', shiireNoInv,'請求元','金額（税込）')}
+    ${section('#FFF3E0','📂','仕入請求書 PDF未添付', shiireNoPdf,'請求元','金額（税込）', ' ※重複あり')}
+    ${section('#E3F2FD','💳','クレジット領収書 インボイス未入力', ryoshuNoInv,'店舗・支払先','金額（税込）')}
+    ${section('#F3E8FF','💵','現金領収書 インボイス未入力', cashNoInv,'店舗・支払先','金額（税込）')}
+    <button onclick="this.closest('[style*=position]').remove()" style="width:100%;padding:14px;background:#185FA5;color:#fff;border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;margin-top:6px">閉じる</button>
+  </div>`;
+  document.body.appendChild(overlay);
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
 }
 
 function closeSyncModal() {

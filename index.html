@@ -2606,34 +2606,36 @@ async function addEntry() {
         overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.55);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box';
         overlay.innerHTML = `<div style="background:#fff;border-radius:16px;padding:24px 20px;max-width:340px;width:100%;box-shadow:0 8px 32px rgba(0,0,0,0.3)">
           <div style="font-size:20px;font-weight:700;margin-bottom:10px">⚠️ すでに登録済みです</div>
-          <div style="font-size:14px;color:#333;line-height:1.8;margin-bottom:20px;background:#FFF8E1;border-radius:10px;padding:12px">
-            ${entry['日付']}<br>${entryName}<br>¥${Number(entry['金額（税込）']).toLocaleString()}<br><span style="color:#898781;font-size:12px">（No.${dup['No.']}）</span>
+          <div style="font-size:14px;color:#333;line-height:1.8;margin-bottom:14px;background:#FFF8E1;border-radius:10px;padding:12px">
+            ${dup['日付']}<br>${(dup['店舗・支払先']||'').trim()}<br>¥${Number(dup['金額（税込）']).toLocaleString()}<br><span style="color:#898781;font-size:12px">No.${dup['No.']} · ${dup['支払方法']||''}</span>
           </div>
+          <button id="dup-detail-btn" style="width:100%;padding:12px;background:#E8F5E9;color:#1B5E20;border:none;border-radius:12px;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:10px">📋 既存エントリの詳細を見る</button>
           <div style="display:flex;gap:10px">
-            <button id="dup-cancel-btn" style="flex:1;padding:14px 8px;background:#f5f4f2;color:#333;border:none;border-radius:12px;font-size:13px;font-weight:600;cursor:pointer;line-height:1.4">キャンセル<br><span style="font-size:11px;color:#666;font-weight:400">リストを確認する</span></button>
-            <button id="dup-ok-btn" style="flex:1;padding:14px 8px;background:#185FA5;color:#fff;border:none;border-radius:12px;font-size:13px;font-weight:600;cursor:pointer;line-height:1.4">OK<br><span style="font-size:11px;color:rgba(255,255,255,0.8);font-weight:400">重複でも登録する</span></button>
+            <button id="dup-cancel-btn" style="flex:1;padding:12px 8px;background:#f5f4f2;color:#333;border:none;border-radius:12px;font-size:13px;font-weight:600;cursor:pointer">閉じる</button>
+            <button id="dup-ok-btn" style="flex:1;padding:12px 8px;background:#185FA5;color:#fff;border:none;border-radius:12px;font-size:13px;font-weight:600;cursor:pointer">重複でも登録</button>
           </div>
         </div>`;
         document.body.appendChild(overlay);
+        document.getElementById('dup-detail-btn').addEventListener('click', () => { document.body.removeChild(overlay); resolve('detail'); });
         document.getElementById('dup-cancel-btn').addEventListener('click', () => { document.body.removeChild(overlay); resolve(false); });
         document.getElementById('dup-ok-btn').addEventListener('click', () => { document.body.removeChild(overlay); resolve(true); });
       });
-      if (!ok) {
-        // キャンセル時は既存エントリのあるリストへ移動してハイライト
+      if (ok === 'detail' || !ok) {
+        // キャンセル or 詳細表示: showDetailで直接既存エントリを開く
         const destPage2 = isCashRyoshu ? 'cash_ryoshu' : 'ryoshu';
-        const mf2 = document.getElementById(destPage2+'-month-filter');
-        if (mf2) mf2.value = '';
-        showPage(destPage2);
-        setTimeout(() => {
-          showToast(`📋 No.${dup['No.']} が既に登録されています`);
-          const dupEl = document.querySelector(`[data-selkey="${destPage2}_${dup['No.']}"]`);
-          if (dupEl) {
-            dupEl.scrollIntoView({behavior:'smooth', block:'center'});
-            dupEl.style.outline = '3px solid #E65100';
-            dupEl.style.borderRadius = '12px';
-            setTimeout(() => { dupEl.style.outline = ''; dupEl.style.borderRadius = ''; }, 3000);
-          }
-        }, 200);
+        if (ok === 'detail') {
+          // 詳細モーダルを直接開く（リストで探す必要なし）
+          const destType = isCashRyoshu ? 'cash_ryoshu' : 'ryoshu';
+          showPage(destPage2);
+          setTimeout(() => showDetail(destType, dup['No.']), 100);
+        } else {
+          // 閉じる: リストへ移動
+          const dupMonth = (dup['日付']||'').replace(/[\/\-]/g,'').slice(0,6);
+          const mf2 = document.getElementById(destPage2+'-month-filter');
+          if (mf2 && dupMonth) mf2.value = dupMonth;
+          showPage(destPage2);
+          setTimeout(() => showToast(`📋 No.${dup['No.']} が既に登録されています`), 200);
+        }
         return;
       }
     }

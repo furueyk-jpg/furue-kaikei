@@ -2591,9 +2591,9 @@ async function addEntry() {
     }).catch(() => {});
   }
 
-  // 重複チェック（同じ日付・金額・店舗名）※日付はフォーマット正規化して比較
-  if (!isShiire) {
-    const nameKey = '店舗・支払先';
+  // 重複チェック（領収書: 日付・金額・店舗名 / 仕入請求書: 日付・金額・請求元）
+  {
+    const nameKey = isShiire ? '請求元' : '店舗・支払先';
     const normalizeDate = d => (d||'').replace(/[-\/]/g,'/');
     const entryDate = normalizeDate(entry['日付']);
     const entryName = (entry[nameKey]||'').trim();
@@ -2626,14 +2626,12 @@ async function addEntry() {
       });
       if (ok === 'detail' || !ok) {
         // キャンセル or 詳細表示: showDetailで直接既存エントリを開く
-        const destPage2 = isCashRyoshu ? 'cash_ryoshu' : 'ryoshu';
+        const destPage2 = isShiire ? 'shiire' : isCashRyoshu ? 'cash_ryoshu' : 'ryoshu';
+        const destType2 = destPage2;
         if (ok === 'detail') {
-          // 詳細モーダルを直接開く（リストで探す必要なし）
-          const destType = isCashRyoshu ? 'cash_ryoshu' : 'ryoshu';
           showPage(destPage2);
-          setTimeout(() => showDetail(destType, dup['No.']), 100);
+          setTimeout(() => showDetail(destType2, dup['No.']), 100);
         } else {
-          // 閉じる: リストへ移動
           const dupMonth = (dup['日付']||'').replace(/[\/\-]/g,'').slice(0,6);
           const mf2 = document.getElementById(destPage2+'-month-filter');
           if (mf2 && dupMonth) mf2.value = dupMonth;

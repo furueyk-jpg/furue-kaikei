@@ -737,6 +737,18 @@ async function loadAllData() {
     }
     if (val && val.uriage) {
       uriageData = restoreFromFb(val.uriage).filter(Boolean);
+      // URIAGE_INITに新しいエントリがあればFirebaseに追加（スケジュールタスクで増えた分）
+      const fbKeys = new Set(uriageData.map(r => `${(r['日付']||'').replace(/-/g,'/')}|${r['現場']}|${r['工事名']}|${r['金額（税別）']}`));
+      const newEntries = URIAGE_INIT.filter(r => !fbKeys.has(`${(r['日付']||'').replace(/-/g,'/')}|${r['現場']}|${r['工事名']}|${r['金額（税別）']}`));
+      if (newEntries.length > 0) {
+        // 日付順にマージしてNo.を振り直す
+        const merged = [...uriageData, ...newEntries.map(r => ({...r}))];
+        merged.sort((a,b) => (a['日付']||'').replace(/-/g,'/').localeCompare((b['日付']||'').replace(/-/g,'/')));
+        merged.forEach((r, i) => { r['No.'] = i + 1; });
+        uriageData = merged;
+        db.ref('furue/uriage').set(sanitizeForFb(uriageData));
+        console.log(`URIAGE_INIT から ${newEntries.length} 件を Firebase に追加しました`);
+      }
     } else {
       uriageData = URIAGE_INIT.map(r => ({...r}));
       db.ref('furue/uriage').set(sanitizeForFb(uriageData));
@@ -3596,7 +3608,11 @@ function renderUriagePage() {
     const now = new Date();
     const currentYm = now.getFullYear() + String(now.getMonth()+1).padStart(2,'0');
     const months = [...new Set(uriageData.map(r => (r['日付']||'').replace(/[\/\-]/g,'').slice(0,6)).filter(m => m.length===6 && /^\d{6}$/.test(m) && m <= currentYm))].sort();
-    const cur = sel.value || (months.includes(currentYm) ? currentYm : (months.length > 0 ? months[months.length-1] : ''));
+    // sel.value が空文字（全月 or 未選択）の場合は空のまま維持し、初回のみ当月を設定
+    const alreadyPopulated = sel.options.length > 1;
+    const cur = alreadyPopulated
+      ? sel.value  // ユーザーの選択を維持（全月=''のまま）
+      : (months.includes(currentYm) ? currentYm : (months.length > 0 ? months[months.length-1] : ''));
     sel.innerHTML = '<option value="">全月</option>' + months.map(m =>
       `<option value="${m}"${m===cur?' selected':''}>${m.slice(0,4)}年${Number(m.slice(4))}月</option>`
     ).join('');

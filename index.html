@@ -2518,6 +2518,7 @@ document.getElementById('f-type').addEventListener('change', function() {
 document.getElementById('f-date').value = new Date().toISOString().split('T')[0];
 
 async function addEntry() {
+  try {
   let type = document.getElementById('f-type').value;
   const date = document.getElementById('f-date').value;
   const amount = document.getElementById('f-amount').value;
@@ -2586,17 +2587,20 @@ async function addEntry() {
     }).catch(() => {});
   }
 
-  // 重複チェック（同じ日付・金額・店舗名）
+  // 重複チェック（同じ日付・金額・店舗名）※日付はフォーマット正規化して比較
   if (!isShiire) {
     const nameKey = '店舗・支払先';
+    const normalizeDate = d => (d||'').replace(/[-\/]/g,'/');
+    const entryDate = normalizeDate(entry['日付']);
+    const entryName = (entry[nameKey]||'').trim();
     const dup = data.find(r =>
-      r['日付'] === entry['日付'] &&
+      normalizeDate(r['日付']) === entryDate &&
       Number(r['金額（税込）']) === Number(entry['金額（税込）']) &&
-      (r[nameKey]||'').trim() === (entry[nameKey]||'').trim() &&
-      (r[nameKey]||'').trim() !== ''
+      (r[nameKey]||'').trim() === entryName &&
+      entryName !== ''
     );
     if (dup) {
-      const ok = confirm(`⚠️ 重複の可能性\n${entry['日付']} ${entry[nameKey]} ¥${Number(entry['金額（税込）']).toLocaleString()}\n同じ内容が既に登録されています（No.${dup['No.']}）。\n続けて登録しますか？`);
+      const ok = confirm(`⚠️ 重複の可能性あり\n${entry['日付']} ${entryName} ¥${Number(entry['金額（税込）']).toLocaleString()}\n同じ内容がすでに登録されています（No.${dup['No.']}）。\n続けて登録しますか？`);
       if (!ok) return;
     }
   }
@@ -2617,6 +2621,9 @@ async function addEntry() {
   showPage(destPage);
   // ページ遷移後にトーストを表示（遷移前だとユーザーが気づかない）
   setTimeout(() => showToast(`✅ ${destLabel}に登録しました`), 100);
+  } catch(err) {
+    alert('登録エラー: ' + err.message + '\n\n' + err.stack);
+  }
 }
 
 // ===== EXPORT CSV =====

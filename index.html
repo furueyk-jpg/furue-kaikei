@@ -1517,8 +1517,12 @@ function renderList(type) {
   let filtered = monthFilter
     ? yearData.filter(r => (r['日付']||'').replace(/[\/\-]/g,'').slice(0,6) === monthFilter)
     : yearData;
-  // 最新日付が先頭
-  filtered = [...filtered].sort((a,b) => (b['日付']||'').localeCompare(a['日付']||''));
+  // 最新日付が先頭（ハイフン/スラッシュ混在を正規化して比較）
+  filtered = [...filtered].sort((a,b) => {
+    const da = (a['日付']||'').replace(/-/g,'/');
+    const db = (b['日付']||'').replace(/-/g,'/');
+    return db.localeCompare(da);
+  });
   filtered = q ? filtered.filter(r => {
     const s = type==='ryoshu' ? r['店舗・支払先'] : r['請求元'];
     const c = type==='ryoshu' ? r['内容'] : r['件名'];
@@ -2546,7 +2550,7 @@ async function addEntry() {
 
   const entry = {
     'No.': newNo,
-    '日付': date,
+    '日付': date.replace(/-/g, '/'),  // ハイフンをスラッシュに統一
     '金額（税込）': Number(amount),
     '支払方法': document.getElementById('f-payment').value,
     '勘定科目（参考）': document.getElementById('f-kanjou').value,
